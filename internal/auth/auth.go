@@ -20,20 +20,25 @@ import (
 )
 
 const (
-	RoleAdmin  = "admin"
-	RoleViewer = "viewer"
+	RoleAdmin    = "admin"
+	RoleViewer   = "viewer"
+	RoleCustomer = "customer" // customer-portal session, scoped to one license key
 )
 
 type Principal struct {
 	UserID   int64
 	Username string
 	Role     string
-	Kind     string // user | apikey
+	Kind     string // user | apikey | customer
+	KeyID    int64  // customer sessions only
 }
 
 func (p Principal) Actor() string {
 	if p.Kind == "apikey" {
 		return "apikey"
+	}
+	if p.Kind == "customer" {
+		return "customer:" + p.Username
 	}
 	return "user:" + p.Username
 }
@@ -69,6 +74,7 @@ func NewTokens(secret string, ttl time.Duration) *Tokens { return &Tokens{secret
 type claims struct {
 	Username string `json:"username"`
 	Role     string `json:"role"`
+	KeyID    int64  `json:"kid,omitempty"`
 	jwt.RegisteredClaims
 }
 
@@ -92,7 +98,21 @@ func (t *Tokens) Verify(token string) (Principal, error) {
 	if err != nil {
 		return Principal{}, err
 	}
-	return Principal{UserID: atoi(c.Subject), Username: c.Username, Role: c.Role, Kind: "user"}, nil
+	p := Principal{UserID: atoi(c.Subject), Username: c.Username, Role: c.Role, Kind: "user", KeyID: c.KeyID}
+	if c.Role == RoleCustomer {
+		p.Kind = "customer"
+	}
+	return p, nil
+}
+
+// IssueCustomer mints a short-lived portal token bound to one license key.
+func (t *Tokens) IssueCustomer(keyID int64, customerID string, ttl time.Duration) (string, time.Time, error) {
+	exp := time.Now().Add(ttl)
+	c := claims{Username: customerID, Role: RoleCustomer, KeyID: keyID, RegisteredClaims: jwt.RegisteredClaims{
+		Subject: "0", IssuedAt: jwt.NewNumericDate(time.Now()), ExpiresAt: jwt.NewNumericDate(exp), Issuer: "kms",
+	}}
+	s, err := jwt.NewWithClaims(jwt.SigningMethodHS256, c).SignedString(t.secret)
+	return s, exp, err
 }
 
 // ---- middleware ----

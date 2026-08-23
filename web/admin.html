@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>NETRA KMS · Admin</title>
-<link rel="stylesheet" href="/netra.css?v=202608231811">
+<link rel="stylesheet" href="/netra.css?v=202608232211">
 </head>
 <body data-autonomy-mode="guided">
 
@@ -50,9 +50,20 @@
   <main class="content">
     <!-- DASHBOARD -->
     <section id="page-dashboard" class="page stack">
-      <div class="row"><div><label>Customer ID</label><input id="dash-cust" placeholder="PT-MUF"></div><button class="btn" id="dash-go" style="flex:0">Load</button></div>
       <div class="grid cols-4" id="dash-stats"></div>
-      <div class="card"><div class="card-h"><h3>Contracts</h3><span class="muted mono" id="dash-count"></span></div><div id="dash-table"></div></div>
+      <div class="card">
+        <div class="card-h">
+          <div class="tabs" style="border:0" id="dash-filters">
+            <button class="active" data-status="">All</button><button data-status="active">Active</button><button data-status="expiring">Expiring ≤60d</button><button data-status="expired">Expired</button>
+          </div>
+          <div class="row" style="flex:0 0 auto;align-items:center;gap:8px">
+            <input id="dash-q" placeholder="search customer / product / key" style="width:260px">
+            <button class="btn sm secondary" id="dash-export">Export CSV</button>
+          </div>
+        </div>
+        <div id="dash-table"></div>
+        <div class="card-h" style="border-top:1px solid var(--border);border-bottom:0"><span class="muted mono" id="dash-count"></span><div class="actions"><button class="btn sm secondary" id="dash-prev">‹ Prev</button><button class="btn sm secondary" id="dash-next">Next ›</button></div></div>
+      </div>
     </section>
 
     <!-- CONTRACTS -->
@@ -151,7 +162,7 @@
     <div class="actions"><button class="btn danger" value="ok" id="confirm-ok">Confirm</button><button class="btn secondary" value="cancel">Cancel</button></div></div>
 </form></dialog>
 
-<script src="/app.js?v=202608231811"></script>
+<script src="/app.js?v=202608232211"></script>
 <script>
 const $ = s => document.querySelector(s), $$ = s => [...document.querySelectorAll(s)];
 const { api, esc, fmtDate, fmtDT, daysLeft, statusBadge, meter, ribbon } = KMS;
@@ -162,7 +173,7 @@ let me = null;
 const isAdmin = () => me?.role === 'admin';
 async function checkAuth() {
   if (!KMS.session.token()) return false;
-  try { me = await api('GET', '/auth/me'); return true; }
+  try { me = await api('GET', '/auth/me'); if (me.kind === 'customer') { KMS.session.clear(); me = null; return false; } return true; }
   catch (e) { if (e.status === 401) KMS.session.clear(); return false; }
 }
 $('#login-form').addEventListener('submit', async e => {
@@ -194,6 +205,7 @@ function route() {
   $$('.page').forEach(p => p.classList.toggle('hidden', p.id !== 'page-' + page));
   $$('.nav a').forEach(a => a.classList.toggle('active', a.dataset.page === page));
   $('#crumb').textContent = titles[page] || page;
+  if (page === 'dashboard') { loadStats(); loadDashboard(); }
   if (page === 'users') loadUsers();
   if (page === 'account') loadAccount();
 }
@@ -244,29 +256,54 @@ $('#pw-form').addEventListener('submit', async e => {
   catch (err) { ribbon('Error: ' + err.message, 'err'); }
 });
 
-// ---------- dashboard ----------
-async function loadDashboard() {
-  const cid = $('#dash-cust').value.trim(); if (!cid) return;
-  ribbon('Loading contracts for ' + cid + '…', 'busy');
+// ---------- dashboard (global) ----------
+const dash = { status: '', q: '', offset: 0, limit: 25, total: 0, rows: [] };
+async function loadStats() {
   try {
-    const { purchases } = await api('GET', '/purchases?customer_id=' + encodeURIComponent(cid));
-    const details = await Promise.all(purchases.map(p => api('GET', `/purchases/${p.id}`)));
-    const keys = details.flatMap(d => d.keys);
-    const seats = keys.reduce((n, k) => n + k.seats, 0), used = keys.reduce((n, k) => n + k.used_seats, 0);
-    const expiring = purchases.filter(p => daysLeft(p.expires_at) <= 60).length;
+    const s = await api('GET', '/stats');
+    const util = s.seats ? Math.round(s.used_seats / s.seats * 100) : 0;
     $('#dash-stats').innerHTML = [
-      ['Contracts', purchases.length, cid],
-      ['Seat quota', seats, 'across active keys'],
-      ['Seats in use', used, seats ? Math.round(used / seats * 100) + '% utilisation' : '—'],
-      ['Expiring ≤60d', expiring, expiring ? 'renewal window open' : 'none'],
-    ].map(([l, v, s]) => `<div class="card stat"><h3>${l}</h3><div class="v">${v}</div><div class="s">${esc(s)}</div></div>`).join('');
-    $('#dash-count').textContent = purchases.length + ' rows';
-    renderContracts('#dash-table', details, d => { location.hash = '#contracts'; renderContracts('#c-list', details, showDetail); showDetail(d); });
-    ribbon('Loaded ' + purchases.length + ' contracts.', 'ok');
+      ['Contracts', s.contracts, s.customers + ' customers'],
+      ['Seat quota', s.seats, 'active keys'],
+      ['Seats in use', s.used_seats, util + '% utilisation · ' + s.activations_today + ' activations today'],
+      ['Attention', s.expiring_soon + s.expired, `${s.expiring_soon} expiring ≤${s.window_days}d · ${s.expired} expired`],
+    ].map(([l, v, sub]) => `<div class="card stat"><h3>${l}</h3><div class="v">${v}</div><div class="s">${esc(sub)}</div></div>`).join('');
   } catch (e) { ribbon('Error: ' + e.message, 'err'); }
 }
-$('#dash-go').addEventListener('click', loadDashboard);
-$('#dash-cust').addEventListener('keydown', e => e.key === 'Enter' && loadDashboard());
+async function loadDashboard() {
+  try {
+    const qs = new URLSearchParams({ status: dash.status, q: dash.q, limit: dash.limit, offset: dash.offset });
+    const r = await api('GET', '/purchases?' + qs);
+    dash.rows = r.purchases; dash.total = r.total;
+    renderRows('#dash-table', r.purchases, row => openContract(row.id));
+    const from = r.total ? dash.offset + 1 : 0, to = Math.min(dash.offset + dash.limit, r.total);
+    $('#dash-count').textContent = `${from}–${to} of ${r.total}`;
+    $('#dash-prev').disabled = dash.offset === 0; $('#dash-next').disabled = to >= r.total;
+  } catch (e) { ribbon('Error: ' + e.message, 'err'); }
+}
+function renderRows(sel, rows, onClick) {
+  const el = $(sel);
+  if (!rows.length) { el.innerHTML = '<div class="empty">No contracts.</div>'; return; }
+  el.innerHTML = `<table><thead><tr><th>ID</th><th>Customer</th><th>Product</th><th>Seats</th><th>Term</th><th>Expires</th><th>Status</th></tr></thead><tbody>${
+    rows.map((p, i) => `<tr class="clickable" data-i="${i}"><td>#${p.id}</td><td>${esc(p.customer_id)}</td><td>${esc(p.product)}</td><td>${p.used_seats} / ${p.seats || p.quantity}</td><td>${p.term_months} mo</td><td>${fmtDate(p.expires_at)}</td><td>${p.key ? statusBadge({ status: 'active', expires_at: p.expires_at }) : '<span class="badge bad">no key</span>'}</td></tr>`).join('')
+  }</tbody></table>`;
+  el.querySelectorAll('tr.clickable').forEach(tr => tr.addEventListener('click', () => onClick(rows[+tr.dataset.i])));
+}
+async function openContract(id) { location.hash = '#contracts'; $('#c-id').value = id; $('#c-cust').value = ''; await searchContracts(); }
+$('#dash-filters').addEventListener('click', e => { const b = e.target.closest('button'); if (!b) return; $$('#dash-filters button').forEach(x => x.classList.toggle('active', x === b)); dash.status = b.dataset.status; dash.offset = 0; loadDashboard(); });
+let qTimer; $('#dash-q').addEventListener('input', e => { clearTimeout(qTimer); qTimer = setTimeout(() => { dash.q = e.target.value.trim(); dash.offset = 0; loadDashboard(); }, 300); });
+$('#dash-prev').addEventListener('click', () => { dash.offset = Math.max(0, dash.offset - dash.limit); loadDashboard(); });
+$('#dash-next').addEventListener('click', () => { dash.offset += dash.limit; loadDashboard(); });
+$('#dash-export').addEventListener('click', async () => {
+  const qs = new URLSearchParams({ status: dash.status, q: dash.q, limit: 500, offset: 0 });
+  const r = await api('GET', '/purchases?' + qs);
+  KMS.csv.download(`contracts-${dash.status || 'all'}-${new Date().toISOString().slice(0, 10)}.csv`, r.purchases, [
+    { label: 'contract_id', value: 'id' }, { label: 'customer_id', value: 'customer_id' }, { label: 'product', value: 'product' },
+    { label: 'license_key', value: 'key' }, { label: 'seats', value: 'seats' }, { label: 'used_seats', value: 'used_seats' },
+    { label: 'term_months', value: 'term_months' }, { label: 'expires_at', value: 'expires_at' }, { label: 'days_left', value: p => daysLeft(p.expires_at) },
+    { label: 'created_at', value: 'created_at' }]);
+  if (r.total > 500) ribbon(`Exported first 500 of ${r.total} — narrow the filter for the rest.`, 'err');
+});
 
 // Render a contracts table into container `sel`; rows call onClick(detail).
 function renderContracts(sel, details, onClick) {
@@ -289,7 +326,7 @@ async function searchContracts() {
     ribbon('Searching…', 'busy');
     let details;
     if (id) details = [await api('GET', `/purchases/${id}`)];
-    else if (cid) { const { purchases } = await api('GET', '/purchases?customer_id=' + encodeURIComponent(cid)); details = await Promise.all(purchases.map(p => api('GET', `/purchases/${p.id}`))); }
+    else if (cid) { const { purchases } = await api('GET', '/purchases?limit=100&customer_id=' + encodeURIComponent(cid)); details = await Promise.all(purchases.map(p => api('GET', `/purchases/${p.id}`))); }
     else return ribbon('Enter a customer ID or contract ID.', 'err');
     renderContracts('#c-list', details, showDetail);
     if (details.length === 1) showDetail(details[0]);
@@ -324,7 +361,7 @@ async function showDetail(d) {
         <button class="btn secondary" data-act="reissue" ${!k ? 'disabled' : ''}>Re-issue key</button>
         <button class="btn danger" data-act="revoke" ${!k ? 'disabled' : ''}>Revoke</button>
       </div>
-      <div class="tabs"><button class="active" data-tab="acts">Activations (${acts.activations.length})</button><button data-tab="events">Audit (${evs.events.length})</button><button data-tab="meta">Details</button></div>
+      <div class="tabs" style="justify-content:space-between"><div style="display:flex"><button class="active" data-tab="acts">Activations (${acts.activations.length})</button><button data-tab="events">Audit (${evs.events.length})</button><button data-tab="meta">Details</button></div><button class="btn sm secondary" data-act="export" style="align-self:center">Export CSV</button></div>
       <div data-pane="acts">${acts.activations.length ? `<table><thead><tr><th>Device</th><th>Hostname</th><th>Activated</th><th>Last seen</th><th></th></tr></thead><tbody>${acts.activations.map(a => `<tr><td>${esc(a.device_id)}</td><td>${esc(a.hostname || '—')}</td><td>${fmtDT(a.activated_at)}</td><td>${fmtDT(a.last_seen_at)}</td><td>${isAdmin() ? `<button class="btn sm secondary" data-act="deactivate" data-dev="${esc(a.device_id)}">Release</button>` : ''}</td></tr>`).join('')}</tbody></table>` : '<div class="empty">No active endpoints.</div>'}</div>
       <div data-pane="events" class="hidden"><ul class="timeline">${evs.events.slice().reverse().map(e => `<li><span class="t">${fmtDT(e.created_at)}</span><span><span class="badge ${e.action === 'revoked' ? 'bad' : e.action === 'renewed' || e.action === 'seats_added' ? 'info' : ''}">${esc(e.action)}</span></span><span>${esc(e.detail || e.key || '')}${e.actor ? ` <span class="muted">· by ${esc(e.actor)}</span>` : ''}</span></li>`).join('') || '<li class="muted">No events.</li>'}</ul></div>
       <div data-pane="meta" class="hidden"><dl class="kv"><dt>Contract ID</dt><dd>#${p.id}</dd><dt>Created</dt><dd>${fmtDT(p.created_at)}</dd><dt>Updated</dt><dd>${fmtDT(p.updated_at)}</dd><dt>Term years</dt><dd>${p.term_years}</dd><dt>Key issued</dt><dd>${k ? fmtDT(k.created_at) : '—'}</dd><dt>Key status</dt><dd>${k ? esc(k.status) : 'none'}</dd></dl></div>
@@ -343,6 +380,15 @@ async function action(act, dev) {
   const p = current.purchase, k = current.keys[0];
   try {
     if (act === 'copy') return KMS.copy(k.key);
+    if (act === 'export') {
+      const pane = $('#c-detail .tabs button.active').dataset.tab;
+      if (pane === 'events') {
+        const { events } = await api('GET', `/purchases/${p.id}/events`);
+        return KMS.csv.download(`audit-${p.id}.csv`, events, [{ label: 'time', value: 'created_at' }, { label: 'action', value: 'action' }, { label: 'actor', value: 'actor' }, { label: 'key', value: 'key' }, { label: 'detail', value: 'detail' }]);
+      }
+      const { activations } = await api('GET', `/keys/${k.key}/activations?include=all`);
+      return KMS.csv.download(`activations-${p.customer_id}-${p.id}.csv`, activations, [{ label: 'device_id', value: 'device_id' }, { label: 'hostname', value: 'hostname' }, { label: 'status', value: 'status' }, { label: 'activated_at', value: 'activated_at' }, { label: 'last_seen_at', value: 'last_seen_at' }, { label: 'deactivated_at', value: 'deactivated_at' }]);
+    }
     if (act === 'renew') {
       $('#renew-id').textContent = '#' + p.id;
       $('#renew-hint').textContent = current.renewable ? `Extends from ${fmtDate(p.expires_at)}${daysLeft(p.expires_at) < 0 ? ' (lapsed → from today)' : ''}. Activations are preserved.` : `Too early: renewable after ${fmtDate(current.renewable_after)}. Request will be rejected (409).`;
@@ -380,8 +426,8 @@ function openDialog(sel) {
   return new Promise(res => {
     const dlg = $(sel), form = dlg.querySelector('form');
     dlg.returnValue = '';
-    dlg.addEventListener('close', () => res(dlg.returnValue === 'ok' ? Object.fromEntries(new FormData(form)) : null), { once: true });
     dlg.showModal();
+    const t = setInterval(() => { if (!dlg.open) { clearInterval(t); res(dlg.returnValue === 'ok' ? Object.fromEntries(new FormData(form)) : null); } }, 50);
   });
 }
 function confirm(title, text) {

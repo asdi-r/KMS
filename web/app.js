@@ -71,3 +71,17 @@ const KMS = (() => {
 
   return { api, session, fmtDate, fmtDT, daysLeft, esc, statusBadge, meter, ribbon, copy, initModes };
 })();
+
+// ---- CSV export (client-side) ----
+KMS.csv = {
+  build(rows, columns) {
+    const q = v => { const s = v == null ? '' : String(v); return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s; };
+    return [columns.map(c => q(c.label)).join(','), ...rows.map(r => columns.map(c => q(typeof c.value === 'function' ? c.value(r) : r[c.value])).join(','))].join('\r\n');
+  },
+  download(filename, rows, columns) {
+    const blob = new Blob(['﻿' + KMS.csv.build(rows, columns)], { type: 'text/csv;charset=utf-8' });
+    const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = filename; a.click();
+    setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+    KMS.ribbon?.('Exported ' + filename + ' (' + rows.length + ' rows)', 'ok');
+  },
+};

@@ -20,8 +20,8 @@ Implements the diagram:
 
 | Path | Purpose | Auth |
 |---|---|---|
-| `/admin` | Admin console: dashboard per customer, contracts, renew / add seats / re-issue / revoke, activations (admin release), audit with actor, key lookup, new contract, user management, change password | username + password → JWT (sessionStorage only); viewer role sees read-only UI |
-| `/portal` | Customer portal: check license status, expiry, seat usage, and whether a given device holds a seat | none (uses public `/validate`) |
+| `/admin` | Admin console: **global dashboard** (stats, filters all/active/expiring/expired, search, pagination, CSV export), contracts, renew / add seats / re-issue / revoke, activations (admin release, CSV), audit with actor (CSV), key lookup, new contract, user management, change password | username + password → JWT (sessionStorage only); viewer role sees read-only UI |
+| `/portal` | Customer portal: quick status check (public), or **sign in** with customer ID + license key to see every activated endpoint, release seats yourself, view history, export CSV | quick check: none · sign-in: 1h JWT scoped to that key (`POST /portal/login`) |
 
 Static files live in `web/` (`netra.css` = design tokens, `app.js` = API helper).
 
@@ -34,6 +34,8 @@ Every push to `main` runs `.github/workflows/build.yml`, which builds `kms`, `km
 Authentication (handled by kms-api):
 - Users: `POST /auth/login` `{"username","password"}` → JWT (8h). Send `Authorization: Bearer <token>`. Roles: `viewer` (read) / `admin` (write + user management). First admin is bootstrapped from `ADMIN_USERNAME`/`ADMIN_PASSWORD` when the users table is empty. Login is rate-limited (5 failures → 15 min lock per IP+username).
 - Machines: `X-API-Key: <KMS_API_KEY>` (admin role, actor `apikey`).
+- Admin overview: `GET /stats`, `GET /purchases?q=&status=active|expiring|expired&customer_id=&limit=&offset=` (paginated, all customers).
+- Customer portal: `POST /portal/login` `{"customer_id","key"}` → 1h token; `GET /portal/me`, `GET /portal/events`, `DELETE /portal/activations/{device_id}` (own key only; actor `customer:<id>`).
 - `GET /auth/me`, `POST /auth/password`, `GET|POST /users`, `PATCH /users/{id}` (role/status/password; last active admin is protected).
 - Endpoint-facing routes are public: `/validate`, `/activate` (returns a one-time `activation_token`), `/deactivate` (requires that token). Admins release seats with `DELETE /keys/{key}/activations/{device_id}`.
 - Every audit event records `actor` (`user:<name>`, `apikey`, `endpoint:<device_id>`).

@@ -48,6 +48,7 @@ func (s *Server) Handler() http.Handler {
 	// Public
 	r.Get("/health", s.health)
 	r.Post("/auth/login", s.login)
+	r.Post("/portal/login", s.portalLogin)
 	// Endpoint-facing (public, rate-limited at Kong; key is the credential)
 	r.Post("/validate", s.validate)     // Key Validation (redis -> lookup)
 	r.Post("/activate", s.activate)     // claim a seat -> returns activation_token
@@ -61,9 +62,18 @@ func (s *Server) Handler() http.Handler {
 		r.Get("/auth/me", s.me)
 		r.Post("/auth/password", s.changePassword)
 
+		// Customer portal (scoped to one key)
+		r.Group(func(r chi.Router) {
+			r.Use(requireCustomer)
+			r.Get("/portal/me", s.portalMe)
+			r.Get("/portal/events", s.portalEvents)
+			r.Delete("/portal/activations/{device}", s.portalRelease)
+		})
+
 		// Read (viewer or admin)
 		r.Group(func(r chi.Router) {
 			r.Use(auth.RequireRole(auth.RoleViewer, writeErr))
+			r.Get("/stats", s.overviewStats)
 			r.Get("/purchases", s.listPurchases)
 			r.Get("/purchases/{id}", s.getPurchase)
 			r.Get("/purchases/{id}/events", s.purchaseEvents)
@@ -250,20 +260,6 @@ func (s *Server) getPurchase(w http.ResponseWriter, r *http.Request) {
 		"renewable":       s.renewable(p.ExpiresAt),
 		"renewable_after": p.ExpiresAt.AddDate(0, 0, -s.cfg.RenewalWindowDays),
 	})
-}
-
-func (s *Server) listPurchases(w http.ResponseWriter, r *http.Request) {
-	cid := r.URL.Query().Get("customer_id")
-	if cid == "" {
-		writeErr(w, 400, "customer_id is required")
-		return
-	}
-	ps, err := s.store.ListPurchasesByCustomer(r.Context(), cid)
-	if err != nil {
-		writeErr(w, 500, "lookup failed")
-		return
-	}
-	writeJSON(w, 200, map[string]any{"purchases": ps})
 }
 
 func (s *Server) purchaseEvents(w http.ResponseWriter, r *http.Request) {

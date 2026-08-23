@@ -8,14 +8,14 @@ services:
     url: http://kms-api:8080
     routes:
       - name: auth
-        paths: ["/auth"]
+        paths: ["/auth", "/portal/login"]
         methods: ["GET", "POST"]
         strip_path: false
         plugins:
           - name: rate-limiting
             config: { minute: 30, policy: local }
       - name: admin-api
-        paths: ["/purchase", "/purchases", "/keys", "/users"]
+        paths: ["/purchase", "/purchases", "/keys", "/users", "/stats", "/portal/me", "/portal/events", "/portal/activations"]
         methods: ["GET", "POST", "PATCH", "DELETE"]
         strip_path: false
       - name: endpoint

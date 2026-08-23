@@ -65,8 +65,8 @@ func (s *Server) login(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) me(w http.ResponseWriter, r *http.Request) {
 	p, _ := auth.FromContext(r.Context())
-	if p.Kind == "apikey" {
-		writeJSON(w, 200, map[string]any{"username": "apikey", "role": p.Role, "kind": p.Kind})
+	if p.Kind != "user" {
+		writeJSON(w, 200, map[string]any{"username": p.Username, "role": p.Role, "kind": p.Kind})
 		return
 	}
 	u, err := s.store.GetUser(r.Context(), p.UserID)
