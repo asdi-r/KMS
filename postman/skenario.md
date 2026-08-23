@@ -56,7 +56,7 @@ Response TC-10:
 | 23 | `POST /activate` endpoint ke-101 | `{"key":"…","device_id":"dev-101"}` | **409** `reason="seat_limit_reached"`, `used_seats=100`, `remaining_seats=0` |
 | 24 | `POST /validate` | `{"key":"…","device_id":"dev-050"}` | `valid=true`, `device_active=true` |
 | 25 | `POST /validate` | `{"key":"…","device_id":"dev-101"}` | `valid=false`, `reason="device_not_activated"` |
-| 26 | `POST /deactivate` | `{"key":"…","device_id":"dev-001"}` | 200, `remaining_seats=1` |
+| 26 | `POST /deactivate` | `{"key":"…","device_id":"dev-001","activation_token":"{{token001}}"}` (token dari TC-20; tanpa token → 400, token salah → 403) | 200, `remaining_seats=1` |
 | 27 | `POST /activate` dev-101 | – | 200 (seat kosong terpakai), `used_seats=100` |
 | 28 | `POST /deactivate` dev-999 | – | 404 `device_not_activated` |
 | 29 | `GET /keys/{{licenseKey}}/activations` (admin) | – | 200; 100 aktivasi aktif (`?include=all` untuk yang sudah dilepas) |

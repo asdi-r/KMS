@@ -10,7 +10,8 @@
     { "key": "apikey", "value": "ISI_DARI_COOLIFY" },
     { "key": "purchaseId", "value": "" },
     { "key": "licenseKey", "value": "" },
-    { "key": "oldKey", "value": "" }
+    { "key": "oldKey", "value": "" },
+    { "key": "token001", "value": "" }
   ],
   "item": [
     {
@@ -110,7 +111,9 @@
             "pm.test('200', () => pm.response.to.have.status(200));",
             "const b = pm.response.json();",
             "pm.test('activated', () => pm.expect(b.activated).to.eql(true));",
-            "pm.test('used_seats=1, remaining=99', () => { pm.expect(b.used_seats).to.eql(1); pm.expect(b.remaining_seats).to.eql(99); });"
+            "pm.test('used_seats=1, remaining=99', () => { pm.expect(b.used_seats).to.eql(1); pm.expect(b.remaining_seats).to.eql(99); });",
+            "pm.test('activation_token diberikan', () => pm.expect(b.activation_token).to.be.a('string').with.length.above(20));",
+            "pm.collectionVariables.set('token001', b.activation_token);"
           ]}}]
         },
         {
@@ -188,7 +191,7 @@
           "request": {
             "method": "POST", "url": "{{baseUrl}}/deactivate",
             "header": [{ "key": "Content-Type", "value": "application/json" }],
-            "body": { "mode": "raw", "raw": "{\"key\":\"{{licenseKey}}\",\"device_id\":\"dev-001\"}" }
+            "body": { "mode": "raw", "raw": "{\"key\":\"{{licenseKey}}\",\"device_id\":\"dev-001\",\"activation_token\":\"{{token001}}\"}" }
           },
           "event": [{ "listen": "test", "script": { "exec": [
             "pm.test('200', () => pm.response.to.have.status(200));",
@@ -212,7 +215,7 @@
           "request": {
             "method": "POST", "url": "{{baseUrl}}/deactivate",
             "header": [{ "key": "Content-Type", "value": "application/json" }],
-            "body": { "mode": "raw", "raw": "{\"key\":\"{{licenseKey}}\",\"device_id\":\"dev-999\"}" }
+            "body": { "mode": "raw", "raw": "{\"key\":\"{{licenseKey}}\",\"device_id\":\"dev-999\",\"activation_token\":\"x\"}" }
           },
           "event": [{ "listen": "test", "script": { "exec": ["pm.test('404 device_not_activated', () => { pm.response.to.have.status(404); pm.expect(pm.response.json().reason).to.eql('device_not_activated'); });"] }}]
         },
