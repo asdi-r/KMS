@@ -3,7 +3,6 @@ package config
 import (
 	"os"
 	"strconv"
-	"strings"
 	"time"
 )
 
@@ -17,8 +16,8 @@ type Config struct {
 	ConsumerGroup     string
 	MaxRetries        int
 	RetryDelay        time.Duration
-	AllowedTermYears  []int // e.g. 1,2
-	DefaultTermYears  int
+	DefaultTermMonths int // default contract term when none given
+	MaxTermMonths     int // sanity cap (0 = unlimited)
 	RenewalWindowDays int // renewal allowed when expiry is within this many days
 	MinRenewMonths    int // renewal term: flexible, at least this many months, no upper bound
 	MaxQuantity       int
@@ -56,15 +55,6 @@ func envDur(k string, def time.Duration) time.Duration {
 }
 
 func Load() Config {
-	terms := []int{}
-	for _, s := range strings.Split(env("ALLOWED_TERM_YEARS", "1,2"), ",") {
-		if n, err := strconv.Atoi(strings.TrimSpace(s)); err == nil && n > 0 {
-			terms = append(terms, n)
-		}
-	}
-	if len(terms) == 0 {
-		terms = []int{1, 2}
-	}
 	return Config{
 		Port:              env("PORT", "8080"),
 		DatabaseURL:       env("DATABASE_URL", "postgres://kms:kms@localhost:5432/kms?sslmode=disable"),
@@ -75,8 +65,8 @@ func Load() Config {
 		ConsumerGroup:     env("QUEUE_GROUP", "subscriber"),
 		MaxRetries:        envInt("MAX_RETRIES", 5),
 		RetryDelay:        envDur("RETRY_DELAY", 5*time.Second),
-		AllowedTermYears:  terms,
-		DefaultTermYears:  envInt("DEFAULT_TERM_YEARS", terms[0]),
+		DefaultTermMonths: envInt("DEFAULT_TERM_MONTHS", 12),
+		MaxTermMonths:     envInt("MAX_TERM_MONTHS", 600),
 		RenewalWindowDays: envInt("RENEWAL_WINDOW_DAYS", 60),
 		MinRenewMonths:    envInt("MIN_RENEW_MONTHS", 1),
 		MaxQuantity:       envInt("MAX_QUANTITY", 1000),
@@ -90,13 +80,4 @@ func Load() Config {
 		LoginMaxFails: envInt("LOGIN_MAX_FAILS", 5),
 		LoginLockout:  envDur("LOGIN_LOCKOUT", 15*time.Minute),
 	}
-}
-
-func (c Config) TermAllowed(years int) bool {
-	for _, t := range c.AllowedTermYears {
-		if t == years {
-			return true
-		}
-	}
-	return false
 }

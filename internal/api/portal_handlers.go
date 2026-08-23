@@ -144,3 +144,19 @@ func (s *Server) portalEvents(w http.ResponseWriter, r *http.Request) {
 	}
 	writeJSON(w, 200, map[string]any{"events": evs})
 }
+
+// searchCustomers powers the Customer ID autocomplete (min 1 char; UI asks from 3).
+func (s *Server) searchCustomers(w http.ResponseWriter, r *http.Request) {
+	q := strings.TrimSpace(r.URL.Query().Get("q"))
+	if q == "" {
+		writeJSON(w, 200, map[string]any{"customers": []string{}})
+		return
+	}
+	limit, _ := strconv.Atoi(r.URL.Query().Get("limit"))
+	cs, err := s.store.SearchCustomers(r.Context(), q, limit)
+	if err != nil {
+		writeErr(w, 500, "lookup failed")
+		return
+	}
+	writeJSON(w, 200, map[string]any{"customers": cs})
+}

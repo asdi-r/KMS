@@ -236,7 +236,7 @@ func logEvent(ctx context.Context, tx pgx.Tx, purchaseID int64, key, action, det
 
 // ---- 1. Generate: new contract + one key with seat quota (atomic) ----
 
-func (s *Store) CreatePurchase(ctx context.Context, customerID, product string, termYears, seats int, key string, expires time.Time) (*Purchase, *Key, error) {
+func (s *Store) CreatePurchase(ctx context.Context, customerID, product string, termMonths, seats int, key string, expires time.Time) (*Purchase, *Key, error) {
 	tx, err := s.db.Begin(ctx)
 	if err != nil {
 		return nil, nil, err
@@ -245,7 +245,7 @@ func (s *Store) CreatePurchase(ctx context.Context, customerID, product string, 
 
 	p, err := scanPurchase(tx.QueryRow(ctx,
 		`INSERT INTO purchases (customer_id, product, quantity, term_years, term_months, expires_at) VALUES ($1,$2,$3,$4,$5,$6)
-		 RETURNING `+purchaseCols, customerID, product, seats, termYears, termYears*12, expires))
+		 RETURNING `+purchaseCols, customerID, product, seats, termMonths/12, termMonths, expires))
 	if err != nil {
 		return nil, nil, err
 	}

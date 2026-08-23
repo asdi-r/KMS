@@ -41,8 +41,8 @@ services:
       DATABASE_URL: postgres://kms:${SERVICE_PASSWORD_POSTGRES}@postgres:5432/kms?sslmode=disable
       REDIS_URL: redis://redis:6379/0
       CACHE_TTL: 10m
-      ALLOWED_TERM_YEARS: "1,2"
-      DEFAULT_TERM_YEARS: "1"
+      DEFAULT_TERM_MONTHS: "12"
+      MAX_TERM_MONTHS: "600"
       RENEWAL_WINDOW_DAYS: "60"
       MIN_RENEW_MONTHS: "1"
       JWT_SECRET: ${JWT_SECRET:-dev-secret-change-me-dev-secret-change-me}

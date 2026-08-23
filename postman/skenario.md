@@ -37,7 +37,7 @@ Catatan: setelah SQL simulasi, jalankan dulu `POST /validate` dengan key agar ca
 | TC | Request | Payload | Ekspektasi |
 |---|---|---|---|
 | 10 | `POST /purchase` | `{"customer_id":"PT-MUF","product":"ANTIVIRUS","quantity":100,"term_years":1}` | **201**; **1 key**; `key.seats=100`, `used_seats=0`; `purchase.quantity=100`, `term_months=12`, `expires_at` ≈ +1 tahun |
-| 11 | `POST /purchase` | `term_years: 3` | 400 |
+| 11 | `POST /purchase` | `term_months: 7` atau `term_years: 5` | 201 (term fleksibel: bulan 1–600 atau tahun ≥1) |
 | 12 | `POST /purchase` | tanpa `customer_id` | 400 |
 | 13 | `POST /purchase` | `quantity: 1001` | 400 (maks 1000) |
 

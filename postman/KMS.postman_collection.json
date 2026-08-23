@@ -68,13 +68,13 @@
           ]}}]
         },
         {
-          "name": "TC-11 term_years=3 → 400",
+          "name": "TC-11 term_years=5 → 201 (term fleksibel)",
           "request": {
             "method": "POST", "url": "{{baseUrl}}/purchase",
             "header": [{ "key": "Content-Type", "value": "application/json" }, { "key": "X-API-Key", "value": "{{apikey}}" }],
-            "body": { "mode": "raw", "raw": "{\"customer_id\":\"PT-MUF\",\"product\":\"ANTIVIRUS\",\"quantity\":1,\"term_years\":3}" }
+            "body": { "mode": "raw", "raw": "{\"customer_id\":\"PT-MUF\",\"product\":\"ANTIVIRUS\",\"quantity\":1,\"term_years\":5}" }
           },
-          "event": [{ "listen": "test", "script": { "exec": ["pm.test('400', () => pm.response.to.have.status(400));"] }}]
+          "event": [{ "listen": "test", "script": { "exec": ["pm.test('201 term_months=60', () => { pm.response.to.have.status(201); pm.expect(pm.response.json().purchase.term_months).to.eql(60); });"] }}]
         },
         {
           "name": "TC-12 Tanpa customer_id → 400",

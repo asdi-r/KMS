@@ -117,3 +117,26 @@ func (s *Store) GetKeyForCustomer(ctx context.Context, key, customerID string) (
 func (s *Store) GetKeyByID(ctx context.Context, id int64) (*Key, error) {
 	return scanKey(s.db.QueryRow(ctx, `SELECT `+keyCols+` FROM license_keys k WHERE k.id=$1`, id))
 }
+
+// SearchCustomers returns distinct customer IDs matching the prefix/substring (for autocomplete).
+func (s *Store) SearchCustomers(ctx context.Context, q string, limit int) ([]string, error) {
+	if limit <= 0 || limit > 50 {
+		limit = 10
+	}
+	rows, err := s.db.Query(ctx,
+		`SELECT customer_id FROM purchases WHERE customer_id ILIKE $1 GROUP BY customer_id ORDER BY max(created_at) DESC LIMIT $2`,
+		"%"+strings.TrimSpace(q)+"%", limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := []string{}
+	for rows.Next() {
+		var c string
+		if err := rows.Scan(&c); err != nil {
+			return nil, err
+		}
+		out = append(out, c)
+	}
+	return out, rows.Err()
+}

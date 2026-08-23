@@ -15,7 +15,7 @@ services:
           - name: rate-limiting
             config: { minute: 30, policy: local }
       - name: admin-api
-        paths: ["/purchase", "/purchases", "/keys", "/users", "/stats", "/portal/me", "/portal/events", "/portal/activations"]
+        paths: ["/purchase", "/purchases", "/keys", "/users", "/stats", "/customers", "/portal/me", "/portal/events", "/portal/activations"]
         methods: ["GET", "POST", "PATCH", "DELETE"]
         strip_path: false
       - name: endpoint

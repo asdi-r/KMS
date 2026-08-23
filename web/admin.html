@@ -3,15 +3,15 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>NETRA KMS · Admin</title>
-<link rel="stylesheet" href="/netra.css?v=202608232211">
+<title>Netrasky KMS · Admin</title>
+<link rel="stylesheet" href="/netra.css?v=202608232323">
 </head>
 <body data-autonomy-mode="guided">
 
 <!-- LOGIN -->
 <div id="login" class="center">
   <div class="panel" style="max-width:420px">
-    <div class="logo-line"><i></i>NETRA PLATFORM · KMS ADMIN</div>
+    <div class="logo-line"><i></i>NETRASKY PLATFORM · KMS ADMIN</div>
     <div class="eyebrow">Authenticate</div>
     <h1 style="margin:8px 0 20px">Key management console</h1>
     <div class="card"><div class="card-b">
@@ -22,14 +22,14 @@
         <p id="login-err" class="mono" style="color:hsl(0 70% 62%);font-size:11px;margin:10px 0 0"></p>
       </form>
     </div></div>
-    <div class="footer-line"><span>NETRA PLATFORM / KMS</span><span>JWT · session only</span></div>
+    <div class="footer-line"><span>NETRASKY PLATFORM / KMS</span><span>JWT · session only</span></div>
   </div>
 </div>
 
 <!-- SHELL -->
 <div id="app" class="shell hidden">
   <aside class="sidebar">
-    <div class="brand"><i></i>NETRA KMS</div>
+    <div class="brand"><i></i>NETRASKY KMS</div>
     <nav class="nav">
       <a href="#dashboard" data-page="dashboard"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>Dashboard</a>
       <a href="#contracts" data-page="contracts"><svg viewBox="0 0 24 24"><path d="M4 4h16v16H4z"/><path d="M8 9h8M8 13h8M8 17h5"/></svg>Contracts</a>
@@ -90,7 +90,12 @@
             <div class="field"><label>Product</label><input name="product" placeholder="ANTIVIRUS" required></div>
             <div class="row">
               <div class="field"><label>Seat quota (endpoints)</label><input name="quantity" type="number" min="1" max="1000" value="100" required></div>
-              <div class="field"><label>Term</label><select name="term_years"><option value="1">1 year</option><option value="2">2 years</option></select></div>
+              <div class="field"><label>Term</label>
+                <div class="row" style="gap:6px">
+                  <select name="term_unit" id="new-unit" style="flex:1"><option value="years">Years</option><option value="months">Months</option></select>
+                  <select name="term_value" id="new-value" style="flex:1"></select>
+                </div>
+              </div>
             </div>
             <button class="btn" type="submit">Generate key</button>
           </form>
@@ -140,7 +145,12 @@
   <div class="card-h"><h3>Renew contract <span class="mono" id="renew-id"></span></h3></div>
   <div class="card-b">
     <div class="row">
-      <div class="field"><label>Term (months, ≥1)</label><input name="term_months" type="number" min="1" value="12" required></div>
+      <div class="field"><label>Term</label>
+        <div class="row" style="gap:6px">
+          <select name="term_unit" id="renew-unit" style="flex:1"><option value="years">Years</option><option value="months">Months</option></select>
+          <select name="term_value" id="renew-value" style="flex:1"></select>
+        </div>
+      </div>
       <div class="field"><label>Add seats (optional)</label><input name="add_quantity" type="number" min="0" value="0"></div>
     </div>
     <p class="muted mono" id="renew-hint" style="font-size:11px"></p>
@@ -162,7 +172,7 @@
     <div class="actions"><button class="btn danger" value="ok" id="confirm-ok">Confirm</button><button class="btn secondary" value="cancel">Cancel</button></div></div>
 </form></dialog>
 
-<script src="/app.js?v=202608232211"></script>
+<script src="/app.js?v=202608232323"></script>
 <script>
 const $ = s => document.querySelector(s), $$ = s => [...document.querySelectorAll(s)];
 const { api, esc, fmtDate, fmtDT, daysLeft, statusBadge, meter, ribbon } = KMS;
@@ -395,7 +405,7 @@ async function action(act, dev) {
       const r = await openDialog('#dlg-renew');
       if (!r) return;
       ribbon('Renewing…', 'busy');
-      const out = await api('POST', `/purchases/${p.id}/renew`, { term_months: +r.term_months, add_quantity: +r.add_quantity || 0 });
+      const out = await api('POST', `/purchases/${p.id}/renew`, { term_months: termToMonths(r.term_unit, r.term_value), add_quantity: +r.add_quantity || 0 });
       ribbon(`Renewed #${p.id} → expires ${fmtDate(out.purchase.expires_at)}${out.seats_added ? ', +' + out.seats_added + ' seats' : ''}.`, 'ok');
     } else if (act === 'seats') {
       $('#seats-id').textContent = '#' + p.id;
@@ -459,7 +469,7 @@ $('#new-form').addEventListener('submit', async e => {
   const f = Object.fromEntries(new FormData(e.target));
   try {
     ribbon('Generating key…', 'busy');
-    const out = await api('POST', '/purchase', { customer_id: f.customer_id.trim(), product: f.product.trim(), quantity: +f.quantity, term_years: +f.term_years });
+    const out = await api('POST', '/purchase', { customer_id: f.customer_id.trim(), product: f.product.trim(), quantity: +f.quantity, term_months: termToMonths(f.term_unit, f.term_value) });
     $('#new-out').classList.remove('hidden');
     $('#new-key').textContent = out.key.key;
     $('#new-kv').innerHTML = `<dt>Contract</dt><dd>#${out.purchase.id}</dd><dt>Customer</dt><dd>${esc(out.purchase.customer_id)}</dd><dt>Product</dt><dd>${esc(out.purchase.product)}</dd><dt>Seat quota</dt><dd>${out.key.seats} endpoints</dd><dt>Term</dt><dd>${out.purchase.term_months} months</dd><dt>Expires</dt><dd>${fmtDate(out.purchase.expires_at)}</dd>`;
@@ -467,6 +477,28 @@ $('#new-form').addEventListener('submit', async e => {
     ribbon(`Issued key for ${out.purchase.customer_id} (#${out.purchase.id}).`, 'ok');
   } catch (err) { ribbon('Error: ' + err.message, 'err'); }
 });
+
+// ---------- term picker (months 1–12 or years 1–10+) ----------
+function termToMonths(unit, value) { return unit === 'months' ? +value : +value * 12; }
+function fillTermValues(unitSel, valueSel, keep) {
+  const months = unitSel.value === 'months';
+  const n = months ? 12 : 10;
+  const cur = keep ? valueSel.value : null;
+  valueSel.innerHTML = Array.from({ length: n }, (_, i) => i + 1).map(v => `<option value="${v}">${v} ${months ? (v === 1 ? 'month' : 'months') : (v === 1 ? 'year' : 'years')}</option>`).join('')
+    + (months ? '' : '<option value="15">15 years</option><option value="20">20 years</option>');
+  valueSel.value = cur && [...valueSel.options].some(o => o.value === cur) ? cur : '1';
+}
+[['#new-unit', '#new-value'], ['#renew-unit', '#renew-value']].forEach(([u, v]) => {
+  fillTermValues($(u), $(v)); $(u).addEventListener('change', () => fillTermValues($(u), $(v)));
+});
+
+// ---------- autocomplete (from 3 characters) ----------
+const custSource = async q => (await api('GET', '/customers?q=' + encodeURIComponent(q))).customers;
+const contractSource = async q => (await api('GET', '/purchases?limit=10&q=' + encodeURIComponent(q))).purchases.map(p => ({ value: p.id, label: `${p.customer_id} · ${p.product} · ${p.used_seats}/${p.seats} seats` }));
+KMS.autocomplete($('#c-cust'), custSource);
+KMS.autocomplete($('#c-id'), async q => /^\d+$/.test(q) ? (await api('GET', `/purchases/${q}`).then(d => [{ value: d.purchase.id, label: `${d.purchase.customer_id} · ${d.purchase.product}` }]).catch(() => [])) : contractSource(q), { minChars: 1 });
+KMS.autocomplete($('#new-form [name=customer_id]'), custSource);
+KMS.autocomplete($('#dash-q'), custSource);
 
 // ---------- start ----------
 $('#ribbon-right').textContent = location.host;

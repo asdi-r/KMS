@@ -85,3 +85,23 @@ KMS.csv = {
     KMS.ribbon?.('Exported ' + filename + ' (' + rows.length + ' rows)', 'ok');
   },
 };
+
+// ---- autocomplete: attaches a <datalist> to an input; fetches after minChars ----
+KMS.autocomplete = function (input, fetchOptions, { minChars = 3, delay = 250 } = {}) {
+  const id = 'dl-' + Math.random().toString(36).slice(2);
+  const dl = document.createElement('datalist'); dl.id = id; document.body.appendChild(dl);
+  input.setAttribute('list', id); input.setAttribute('autocomplete', 'off');
+  let timer, last = '';
+  input.addEventListener('input', () => {
+    const q = input.value.trim();
+    clearTimeout(timer);
+    if (q.length < minChars) { dl.innerHTML = ''; last = ''; return; }
+    if (q === last) return;
+    timer = setTimeout(async () => {
+      try {
+        const opts = await fetchOptions(q); last = q;
+        dl.innerHTML = opts.map(o => typeof o === 'string' ? `<option value="${KMS.esc(o)}"></option>` : `<option value="${KMS.esc(o.value)}">${KMS.esc(o.label || '')}</option>`).join('');
+      } catch { /* ignore */ }
+    }, delay);
+  });
+};

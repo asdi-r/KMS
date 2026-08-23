@@ -34,6 +34,7 @@ Every push to `main` runs `.github/workflows/build.yml`, which builds `kms`, `km
 Authentication (handled by kms-api):
 - Users: `POST /auth/login` `{"username","password"}` → JWT (8h). Send `Authorization: Bearer <token>`. Roles: `viewer` (read) / `admin` (write + user management). First admin is bootstrapped from `ADMIN_USERNAME`/`ADMIN_PASSWORD` when the users table is empty. Login is rate-limited (5 failures → 15 min lock per IP+username).
 - Machines: `X-API-Key: <KMS_API_KEY>` (admin role, actor `apikey`).
+- Autocomplete: `GET /customers?q=` (distinct customer IDs, ILIKE).
 - Admin overview: `GET /stats`, `GET /purchases?q=&status=active|expiring|expired&customer_id=&limit=&offset=` (paginated, all customers).
 - Customer portal: `POST /portal/login` `{"customer_id","key"}` → 1h token; `GET /portal/me`, `GET /portal/events`, `DELETE /portal/activations/{device_id}` (own key only; actor `customer:<id>`).
 - `GET /auth/me`, `POST /auth/password`, `GET|POST /users`, `PATCH /users/{id}` (role/status/password; last active admin is protected).
@@ -42,7 +43,7 @@ Authentication (handled by kms-api):
 
 | Requirement | Endpoint |
 |---|---|
-| 1. Generate (1/2 yr, N endpoints) | `POST /purchase` `{"customer_id","product","quantity","term_years":1|2}` → one key with `seats` = quantity |
+| 1. Generate | `POST /purchase` `{"customer_id","product","quantity","term_months":1..600}` (or `"term_years":N`, any N ≥ 1; default 12 months) → one key with `seats` = quantity |
 | Activation (seat enforcement) | `POST /activate` `{"key","device_id","hostname?"}` (200 / 409 `seat_limit_reached` / 403 expired/revoked) · `POST /deactivate` `{"key","device_id"}` · `GET /keys/{key}/activations` |
 | 2. Re-issuance | `GET /purchases?customer_id=` · `GET /purchases/{id}` (`?include=all` incl. revoked) · `GET /keys?customer_id=` · `GET /keys/{key}` · `POST /keys/{key}/reissue` (new key string, same seats/expiry, activations carried over) |
 | 3. Renewal | `POST /purchases/{id}/renew` `{"term_months":N}` (flexible, >= `MIN_RENEW_MONTHS`, no upper bound; `"term_years"` shorthand; optional `"add_quantity"` issues extra keys in the same step) — allowed only within `RENEWAL_WINDOW_DAYS` (60) before expiry or after lapse; extends from current expiry (or from today if lapsed), updates all active keys; otherwise 409 with `renewable_after` |
@@ -53,8 +54,7 @@ Authentication (handled by kms-api):
 
 ## Env vars
 
-`DATABASE_URL`, `REDIS_URL`, `PORT` (8080), `CACHE_TTL` (10m), `ALLOWED_TERM_YEARS` (1,2),
-`DEFAULT_TERM_YEARS` (1), `RENEWAL_WINDOW_DAYS` (60), `MIN_RENEW_MONTHS` (1), `MAX_QUANTITY` (1000),
+`DATABASE_URL`, `REDIS_URL`, `PORT` (8080), `CACHE_TTL` (10m), `DEFAULT_TERM_MONTHS` (12), `MAX_TERM_MONTHS` (600), `RENEWAL_WINDOW_DAYS` (60), `MIN_RENEW_MONTHS` (1), `MAX_QUANTITY` (1000),
 `QUEUE_STREAM` (kms.keys), `QUEUE_DLQ` (kms.keys.dlq), `MAX_RETRIES` (5), `RETRY_DELAY` (5s),
 `JWT_SECRET` (required, ≥32 chars), `JWT_TTL` (8h), `KMS_API_KEY` (optional machine key), `ADMIN_USERNAME` (admin), `ADMIN_PASSWORD` (bootstrap), `LOGIN_MAX_FAILS` (5), `LOGIN_LOCKOUT` (15m), `WEBHOOK_URL` (optional; subscriber POSTs each event there).
 

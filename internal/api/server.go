@@ -74,6 +74,7 @@ func (s *Server) Handler() http.Handler {
 		r.Group(func(r chi.Router) {
 			r.Use(auth.RequireRole(auth.RoleViewer, writeErr))
 			r.Get("/stats", s.overviewStats)
+			r.Get("/customers", s.searchCustomers)
 			r.Get("/purchases", s.listPurchases)
 			r.Get("/purchases/{id}", s.getPurchase)
 			r.Get("/purchases/{id}/events", s.purchaseEvents)
@@ -158,7 +159,8 @@ type purchaseReq struct {
 	CustomerID string `json:"customer_id"`
 	Product    string `json:"product"`
 	Quantity   int    `json:"quantity"`   // seat quota = number of endpoints
-	TermYears  int    `json:"term_years"` // 1 or 2
+	TermYears  int    `json:"term_years"`  // any whole number of years (>= 1)
+	TermMonths int    `json:"term_months"` // or months (>= 1); takes precedence
 }
 
 func (s *Server) validQuantity(w http.ResponseWriter, q int) (int, bool) {
@@ -172,15 +174,24 @@ func (s *Server) validQuantity(w http.ResponseWriter, q int) (int, bool) {
 	return q, true
 }
 
-func (s *Server) validTerm(w http.ResponseWriter, years int) (int, bool) {
-	if years == 0 {
-		years = s.cfg.DefaultTermYears
+// termMonths resolves a contract term: term_months (1..) or term_years (1..) as
+// shorthand; default DEFAULT_TERM_MONTHS; capped at MAX_TERM_MONTHS.
+func (s *Server) termMonths(w http.ResponseWriter, months, years, minMonths int) (int, bool) {
+	if months == 0 && years > 0 {
+		months = years * 12
 	}
-	if !s.cfg.TermAllowed(years) {
-		writeErr(w, 400, "term_years must be one of "+joinInts(s.cfg.AllowedTermYears))
+	if months == 0 {
+		months = s.cfg.DefaultTermMonths
+	}
+	if months < minMonths {
+		writeErr(w, 400, "term_months must be at least "+strconv.Itoa(minMonths)+" (or use term_years >= 1)")
 		return 0, false
 	}
-	return years, true
+	if s.cfg.MaxTermMonths > 0 && months > s.cfg.MaxTermMonths {
+		writeErr(w, 400, "term_months max "+strconv.Itoa(s.cfg.MaxTermMonths))
+		return 0, false
+	}
+	return months, true
 }
 
 func (s *Server) purchase(w http.ResponseWriter, r *http.Request) {
@@ -199,13 +210,13 @@ func (s *Server) purchase(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	years, ok := s.validTerm(w, req.TermYears)
+	months, ok := s.termMonths(w, req.TermMonths, req.TermYears, 1)
 	if !ok {
 		return
 	}
-	expires := time.Now().AddDate(years, 0, 0)
+	expires := time.Now().AddDate(0, months, 0)
 
-	p, k, err := s.store.CreatePurchase(r.Context(), req.CustomerID, req.Product, years, seats, keygen.New(), expires)
+	p, k, err := s.store.CreatePurchase(r.Context(), req.CustomerID, req.Product, months, seats, keygen.New(), expires)
 	if err != nil {
 		slog.Error("create purchase", "err", err)
 		writeErr(w, 500, "could not create purchase")
@@ -370,15 +381,8 @@ func (s *Server) renewPurchase(w http.ResponseWriter, r *http.Request) {
 		AddQuantity int `json:"add_quantity"`
 	}
 	_ = json.NewDecoder(r.Body).Decode(&req)
-	months := req.TermMonths
-	if months == 0 && req.TermYears > 0 {
-		months = req.TermYears * 12
-	}
-	if months == 0 {
-		months = s.cfg.DefaultTermYears * 12
-	}
-	if months < s.cfg.MinRenewMonths {
-		writeErr(w, 400, "term_months must be at least "+strconv.Itoa(s.cfg.MinRenewMonths))
+	months, ok := s.termMonths(w, req.TermMonths, req.TermYears, s.cfg.MinRenewMonths)
+	if !ok {
 		return
 	}
 	if req.AddQuantity < 0 || req.AddQuantity > s.cfg.MaxQuantity {
@@ -617,14 +621,6 @@ func merge(a, b map[string]any) map[string]any {
 		a[k] = v
 	}
 	return a
-}
-
-func joinInts(ns []int) string {
-	parts := make([]string, len(ns))
-	for i, n := range ns {
-		parts[i] = strconv.Itoa(n)
-	}
-	return strings.Join(parts, ",")
 }
 
 func writeJSON(w http.ResponseWriter, code int, v any) {
