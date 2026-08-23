@@ -1,0 +1,430 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>NETRA KMS · Admin</title>
+<link rel="stylesheet" href="/netra.css">
+</head>
+<body data-autonomy-mode="guided">
+
+<!-- LOGIN -->
+<div id="login" class="center">
+  <div class="panel" style="max-width:420px">
+    <div class="logo-line"><i></i>NETRA PLATFORM · KMS ADMIN</div>
+    <div class="eyebrow">Authenticate</div>
+    <h1 style="margin:8px 0 20px">Key management console</h1>
+    <div class="card"><div class="card-b">
+      <form id="login-form">
+        <div class="field"><label>Username</label><input id="username" autocomplete="username" required></div>
+        <div class="field"><label>Password</label><input id="password" type="password" autocomplete="current-password" required></div>
+        <button class="btn" type="submit" style="width:100%">Authenticate</button>
+        <p id="login-err" class="mono" style="color:hsl(0 70% 62%);font-size:11px;margin:10px 0 0"></p>
+      </form>
+    </div></div>
+    <div class="footer-line"><span>NETRA PLATFORM / KMS</span><span>JWT · session only</span></div>
+  </div>
+</div>
+
+<!-- SHELL -->
+<div id="app" class="shell hidden">
+  <aside class="sidebar">
+    <div class="brand"><i></i>NETRA KMS</div>
+    <nav class="nav">
+      <a href="#dashboard" data-page="dashboard"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>Dashboard</a>
+      <a href="#contracts" data-page="contracts"><svg viewBox="0 0 24 24"><path d="M4 4h16v16H4z"/><path d="M8 9h8M8 13h8M8 17h5"/></svg>Contracts</a>
+      <a href="#keys" data-page="keys"><svg viewBox="0 0 24 24"><circle cx="8" cy="15" r="4"/><path d="M11 12l9-9M15 5l3 3M18 5l2 2"/></svg>Key lookup</a>
+      <a href="#new" data-page="new"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 8v8M8 12h8"/></svg>New contract</a>
+      <a href="#users" data-page="users" id="nav-users"><svg viewBox="0 0 24 24"><circle cx="9" cy="8" r="4"/><path d="M2 21a7 7 0 0 1 14 0"/><circle cx="17" cy="9" r="3"/><path d="M16 15a6 6 0 0 1 6 6"/></svg>Users</a>
+    </nav>
+    <div class="user"><span id="who"></span><br><a href="#account">account</a> · <a href="#" id="logout">sign out</a></div>
+  </aside>
+
+  <header class="header">
+    <div class="eyebrow" id="crumb">Dashboard</div>
+    <div class="modes">
+      <button data-mode="autonomous">Autonomous</button><button data-mode="assisted">Assisted</button><button data-mode="guided">Guided</button><button data-mode="llm">LLM</button>
+    </div>
+  </header>
+
+  <main class="content">
+    <!-- DASHBOARD -->
+    <section id="page-dashboard" class="page stack">
+      <div class="row"><div><label>Customer ID</label><input id="dash-cust" placeholder="PT-MUF"></div><button class="btn" id="dash-go" style="flex:0">Load</button></div>
+      <div class="grid cols-4" id="dash-stats"></div>
+      <div class="card"><div class="card-h"><h3>Contracts</h3><span class="muted mono" id="dash-count"></span></div><div id="dash-table"></div></div>
+    </section>
+
+    <!-- CONTRACTS -->
+    <section id="page-contracts" class="page stack hidden">
+      <div class="row"><div><label>Customer ID</label><input id="c-cust" placeholder="PT-MUF"></div><div><label>Contract ID</label><input id="c-id" placeholder="12"></div><button class="btn" id="c-go" style="flex:0">Search</button></div>
+      <div class="grid" style="grid-template-columns: 1fr 1.4fr">
+        <div class="card"><div class="card-h"><h3>Results</h3></div><div id="c-list"><div class="empty">Search by customer or contract ID.</div></div></div>
+        <div id="c-detail"><div class="card"><div class="empty">Select a contract.</div></div></div>
+      </div>
+    </section>
+
+    <!-- KEY LOOKUP -->
+    <section id="page-keys" class="page stack hidden">
+      <div class="row"><div><label>License key</label><input id="k-key" placeholder="XXXXX-XXXXX-XXXXX-XXXXX-XXXXX" style="text-transform:uppercase"></div><button class="btn" id="k-go" style="flex:0">Lookup</button></div>
+      <div id="k-out"><div class="card"><div class="empty">Enter a key to open its contract.</div></div></div>
+    </section>
+
+    <!-- NEW CONTRACT -->
+    <section id="page-new" class="page stack hidden">
+      <div class="grid cols-2">
+        <div class="card"><div class="card-h"><h3>Generate contract + license key</h3></div><div class="card-b">
+          <form id="new-form">
+            <div class="field"><label>Customer ID</label><input name="customer_id" placeholder="PT-MUF" required></div>
+            <div class="field"><label>Product</label><input name="product" placeholder="ANTIVIRUS" required></div>
+            <div class="row">
+              <div class="field"><label>Seat quota (endpoints)</label><input name="quantity" type="number" min="1" max="1000" value="100" required></div>
+              <div class="field"><label>Term</label><select name="term_years"><option value="1">1 year</option><option value="2">2 years</option></select></div>
+            </div>
+            <button class="btn" type="submit">Generate key</button>
+          </form>
+        </div></div>
+        <div id="new-out" class="card hidden"><div class="card-h"><h3>Issued</h3><span class="badge active">active</span></div><div class="card-b stack">
+          <div class="keybox"><code id="new-key"></code><button class="btn sm secondary" id="new-copy">Copy</button></div>
+          <dl class="kv" id="new-kv"></dl>
+          <p class="muted mono" style="font-size:11px">Hand this key to the customer's antivirus central. Endpoints activate it with their device_id.</p>
+        </div></div>
+      </div>
+    </section>
+    <!-- USERS -->
+    <section id="page-users" class="page stack hidden">
+      <div class="grid" style="grid-template-columns: 1.4fr 1fr">
+        <div class="card"><div class="card-h"><h3>Users</h3><span class="muted mono" id="u-count"></span></div><div id="u-table"></div></div>
+        <div class="card"><div class="card-h"><h3>Create user</h3></div><div class="card-b">
+          <form id="u-form">
+            <div class="field"><label>Username</label><input name="username" required minlength="3"></div>
+            <div class="field"><label>Password (min 10)</label><input name="password" type="password" required minlength="10"></div>
+            <div class="field"><label>Role</label><select name="role"><option value="viewer">viewer — read only</option><option value="admin">admin — full control</option></select></div>
+            <button class="btn" type="submit">Create</button>
+          </form>
+        </div></div>
+      </div>
+    </section>
+
+    <!-- ACCOUNT -->
+    <section id="page-account" class="page stack hidden">
+      <div class="grid cols-2">
+        <div class="card"><div class="card-h"><h3>Change password</h3></div><div class="card-b">
+          <form id="pw-form">
+            <div class="field"><label>Current password</label><input name="current_password" type="password" required></div>
+            <div class="field"><label>New password (min 10)</label><input name="new_password" type="password" required minlength="10"></div>
+            <button class="btn" type="submit">Update</button>
+          </form>
+        </div></div>
+        <div class="card"><div class="card-h"><h3>Session</h3></div><div class="card-b"><dl class="kv" id="acct-kv"></dl></div></div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="ribbon"><span class="msg" id="ribbon-msg">DECISION RIBBON — idle.</span><span class="muted" id="ribbon-right"></span></footer>
+</div>
+
+<!-- DIALOGS -->
+<dialog id="dlg-renew"><form method="dialog" id="renew-form">
+  <div class="card-h"><h3>Renew contract <span class="mono" id="renew-id"></span></h3></div>
+  <div class="card-b">
+    <div class="row">
+      <div class="field"><label>Term (months, ≥1)</label><input name="term_months" type="number" min="1" value="12" required></div>
+      <div class="field"><label>Add seats (optional)</label><input name="add_quantity" type="number" min="0" value="0"></div>
+    </div>
+    <p class="muted mono" id="renew-hint" style="font-size:11px"></p>
+    <div class="actions"><button class="btn" value="ok">Renew</button><button class="btn secondary" value="cancel" formnovalidate>Cancel</button></div>
+  </div>
+</form></dialog>
+
+<dialog id="dlg-seats"><form method="dialog" id="seats-form">
+  <div class="card-h"><h3>Add seats to contract <span class="mono" id="seats-id"></span></h3></div>
+  <div class="card-b">
+    <div class="field"><label>Additional seats</label><input name="quantity" type="number" min="1" max="1000" value="50" required></div>
+    <div class="actions"><button class="btn" value="ok">Add</button><button class="btn secondary" value="cancel" formnovalidate>Cancel</button></div>
+  </div>
+</form></dialog>
+
+<dialog id="dlg-confirm"><form method="dialog">
+  <div class="card-h"><h3 id="confirm-title">Confirm</h3></div>
+  <div class="card-b"><p id="confirm-text" class="mono" style="font-size:12px;margin:0 0 16px"></p>
+    <div class="actions"><button class="btn danger" value="ok" id="confirm-ok">Confirm</button><button class="btn secondary" value="cancel">Cancel</button></div></div>
+</form></dialog>
+
+<script src="/app.js"></script>
+<script>
+const $ = s => document.querySelector(s), $$ = s => [...document.querySelectorAll(s)];
+const { api, esc, fmtDate, fmtDT, daysLeft, statusBadge, meter, ribbon } = KMS;
+let current = null; // {purchase, keys, renewable, renewable_after}
+
+// ---------- auth ----------
+let me = null;
+const isAdmin = () => me?.role === 'admin';
+async function checkAuth() {
+  if (!KMS.session.token()) return false;
+  try { me = await api('GET', '/auth/me'); return true; }
+  catch (e) { if (e.status === 401) KMS.session.clear(); return false; }
+}
+$('#login-form').addEventListener('submit', async e => {
+  e.preventDefault();
+  $('#login-err').textContent = '';
+  try {
+    const r = await api('POST', '/auth/login', { username: $('#username').value.trim(), password: $('#password').value }, { auth: false });
+    KMS.session.set({ token: r.token, user: r.user, expires_at: r.expires_at });
+    me = r.user; boot();
+  } catch (err) {
+    $('#login-err').textContent = err.status === 429 ? 'Too many failed attempts — locked for 15 minutes.' : 'Authentication failed: ' + err.message;
+  }
+});
+$('#logout').addEventListener('click', e => { e.preventDefault(); KMS.session.clear(); location.hash = ''; location.reload(); });
+
+function boot() {
+  $('#login').classList.add('hidden'); $('#app').classList.remove('hidden');
+  $('#who').textContent = `${me.username} · ${me.role.toUpperCase()}`;
+  $('#nav-users').classList.toggle('hidden', !isAdmin());
+  $$('[data-page=new]').forEach(a => a.classList.toggle('hidden', !isAdmin()));
+  KMS.initModes();
+  route();
+}
+
+// ---------- routing ----------
+const titles = { dashboard: 'Dashboard', contracts: 'Contracts', keys: 'Key lookup', new: 'New contract', users: 'Users', account: 'Account' };
+function route() {
+  const page = (location.hash || '#dashboard').slice(1).split('/')[0];
+  $$('.page').forEach(p => p.classList.toggle('hidden', p.id !== 'page-' + page));
+  $$('.nav a').forEach(a => a.classList.toggle('active', a.dataset.page === page));
+  $('#crumb').textContent = titles[page] || page;
+  if (page === 'users') loadUsers();
+  if (page === 'account') loadAccount();
+}
+window.addEventListener('hashchange', route);
+
+// ---------- users (admin) ----------
+async function loadUsers() {
+  if (!isAdmin()) return;
+  try {
+    const { users } = await api('GET', '/users');
+    $('#u-count').textContent = users.length + ' users';
+    $('#u-table').innerHTML = `<table><thead><tr><th>User</th><th>Role</th><th>Status</th><th>Last login</th><th></th></tr></thead><tbody>${users.map(u => `
+      <tr><td>${esc(u.username)}${u.id === me.id ? ' <span class="muted">(you)</span>' : ''}</td>
+      <td><span class="badge ${u.role === 'admin' ? 'info' : ''}">${esc(u.role)}</span></td>
+      <td><span class="badge ${u.status === 'active' ? 'ok' : 'bad'}">${esc(u.status)}</span></td>
+      <td>${fmtDT(u.last_login_at)}</td>
+      <td class="actions">
+        <button class="btn sm secondary" data-uid="${u.id}" data-role="${u.role === 'admin' ? 'viewer' : 'admin'}">${u.role === 'admin' ? 'Make viewer' : 'Make admin'}</button>
+        <button class="btn sm ${u.status === 'active' ? 'danger' : 'secondary'}" data-uid="${u.id}" data-status="${u.status === 'active' ? 'disabled' : 'active'}">${u.status === 'active' ? 'Disable' : 'Enable'}</button>
+        <button class="btn sm secondary" data-uid="${u.id}" data-reset="1">Reset pw</button>
+      </td></tr>`).join('')}</tbody></table>`;
+    $('#u-table').querySelectorAll('button[data-uid]').forEach(b => b.addEventListener('click', async () => {
+      const id = b.dataset.uid; let body = {};
+      if (b.dataset.role) body.role = b.dataset.role;
+      if (b.dataset.status) body.status = b.dataset.status;
+      if (b.dataset.reset) { const pw = prompt('New password for this user (min 10 chars):'); if (!pw) return; body.password = pw; }
+      try { await api('PATCH', `/users/${id}`, body); ribbon('User updated.', 'ok'); loadUsers(); }
+      catch (e) { ribbon('Error: ' + e.message, 'err'); }
+    }));
+  } catch (e) { ribbon('Error: ' + e.message, 'err'); }
+}
+$('#u-form').addEventListener('submit', async e => {
+  e.preventDefault();
+  const f = Object.fromEntries(new FormData(e.target));
+  try { await api('POST', '/users', f); ribbon('User ' + f.username + ' created.', 'ok'); e.target.reset(); loadUsers(); }
+  catch (err) { ribbon('Error: ' + err.message, 'err'); }
+});
+
+// ---------- account ----------
+function loadAccount() {
+  const s = KMS.session.get();
+  $('#acct-kv').innerHTML = `<dt>User</dt><dd>${esc(me.username)}</dd><dt>Role</dt><dd>${esc(me.role)}</dd><dt>Token expires</dt><dd>${fmtDT(s?.expires_at)}</dd><dt>Last login</dt><dd>${fmtDT(me.last_login_at)}</dd>`;
+}
+$('#pw-form').addEventListener('submit', async e => {
+  e.preventDefault();
+  const f = Object.fromEntries(new FormData(e.target));
+  try { await api('POST', '/auth/password', f); ribbon('Password changed.', 'ok'); e.target.reset(); }
+  catch (err) { ribbon('Error: ' + err.message, 'err'); }
+});
+
+// ---------- dashboard ----------
+async function loadDashboard() {
+  const cid = $('#dash-cust').value.trim(); if (!cid) return;
+  ribbon('Loading contracts for ' + cid + '…', 'busy');
+  try {
+    const { purchases } = await api('GET', '/purchases?customer_id=' + encodeURIComponent(cid));
+    const details = await Promise.all(purchases.map(p => api('GET', `/purchases/${p.id}`)));
+    const keys = details.flatMap(d => d.keys);
+    const seats = keys.reduce((n, k) => n + k.seats, 0), used = keys.reduce((n, k) => n + k.used_seats, 0);
+    const expiring = purchases.filter(p => daysLeft(p.expires_at) <= 60).length;
+    $('#dash-stats').innerHTML = [
+      ['Contracts', purchases.length, cid],
+      ['Seat quota', seats, 'across active keys'],
+      ['Seats in use', used, seats ? Math.round(used / seats * 100) + '% utilisation' : '—'],
+      ['Expiring ≤60d', expiring, expiring ? 'renewal window open' : 'none'],
+    ].map(([l, v, s]) => `<div class="card stat"><h3>${l}</h3><div class="v">${v}</div><div class="s">${esc(s)}</div></div>`).join('');
+    $('#dash-count').textContent = purchases.length + ' rows';
+    renderContracts('#dash-table', details, d => { location.hash = '#contracts'; renderContracts('#c-list', details, showDetail); showDetail(d); });
+    ribbon('Loaded ' + purchases.length + ' contracts.', 'ok');
+  } catch (e) { ribbon('Error: ' + e.message, 'err'); }
+}
+$('#dash-go').addEventListener('click', loadDashboard);
+$('#dash-cust').addEventListener('keydown', e => e.key === 'Enter' && loadDashboard());
+
+// Render a contracts table into container `sel`; rows call onClick(detail).
+function renderContracts(sel, details, onClick) {
+  const el = $(sel);
+  if (!details.length) { el.innerHTML = '<div class="empty">No contracts.</div>'; return; }
+  el.innerHTML = `<table><thead><tr><th>ID</th><th>Customer</th><th>Product</th><th>Seats</th><th>Expires</th><th>Status</th></tr></thead><tbody>${
+    details.map((d, i) => { const p = d.purchase, k = d.keys[0] || {};
+      return `<tr class="clickable" data-i="${i}"><td>#${p.id}</td><td>${esc(p.customer_id)}</td><td>${esc(p.product)}</td><td>${k.used_seats ?? 0} / ${p.quantity}</td><td>${fmtDate(p.expires_at)}</td><td>${k.key ? statusBadge(k) : '<span class="badge">no key</span>'}</td></tr>`; }).join('')
+  }</tbody></table>`;
+  el.querySelectorAll('tr.clickable').forEach(tr => tr.addEventListener('click', () => {
+    el.querySelectorAll('tr').forEach(r => r.classList.toggle('selected', r === tr));
+    onClick(details[+tr.dataset.i]);
+  }));
+}
+
+// ---------- contracts ----------
+async function searchContracts() {
+  const cid = $('#c-cust').value.trim(), id = $('#c-id').value.trim();
+  try {
+    ribbon('Searching…', 'busy');
+    let details;
+    if (id) details = [await api('GET', `/purchases/${id}`)];
+    else if (cid) { const { purchases } = await api('GET', '/purchases?customer_id=' + encodeURIComponent(cid)); details = await Promise.all(purchases.map(p => api('GET', `/purchases/${p.id}`))); }
+    else return ribbon('Enter a customer ID or contract ID.', 'err');
+    renderContracts('#c-list', details, showDetail);
+    if (details.length === 1) showDetail(details[0]);
+    ribbon(details.length + ' contract(s).', 'ok');
+  } catch (e) { ribbon('Error: ' + e.message, 'err'); $('#c-list').innerHTML = '<div class="empty">' + esc(e.message) + '</div>'; }
+}
+$('#c-go').addEventListener('click', searchContracts);
+['#c-cust', '#c-id'].forEach(s => $(s).addEventListener('keydown', e => e.key === 'Enter' && searchContracts()));
+
+async function refreshDetail() { if (current) showDetail(await api('GET', `/purchases/${current.purchase.id}`)); }
+
+async function showDetail(d) {
+  current = d;
+  const p = d.purchase, k = d.keys[0];
+  const dl = daysLeft(p.expires_at);
+  let acts = { activations: [] }, evs = { events: [] };
+  try { [acts, evs] = await Promise.all([k ? api('GET', `/keys/${k.key}/activations`) : { activations: [] }, api('GET', `/purchases/${p.id}/events`)]); } catch (e) { ribbon('Error: ' + e.message, 'err'); }
+
+  $('#c-detail').innerHTML = `
+  <div class="card stack" style="padding-bottom:16px">
+    <div class="card-h"><div><h3>Contract #${p.id}</h3><h2 style="margin-top:4px">${esc(p.customer_id)} · ${esc(p.product)}</h2></div>${k ? statusBadge(k) : ''}</div>
+    <div class="card-b stack" style="padding-top:0">
+      ${k ? `<div class="keybox"><code>${esc(k.key)}</code><button class="btn sm secondary" data-act="copy">Copy</button></div>` : '<div class="empty">No active key (revoked).</div>'}
+      <div class="grid cols-3">
+        <div class="card stat"><h3>Seats</h3><div class="v">${k ? k.used_seats : 0} <span class="muted" style="font-size:14px">/ ${p.quantity}</span></div>${k ? meter(k.used_seats, k.seats) : ''}</div>
+        <div class="card stat"><h3>Expires</h3><div class="v" style="font-size:18px">${fmtDate(p.expires_at)}</div><div class="s">${dl >= 0 ? dl + ' days left' : 'lapsed ' + Math.abs(dl) + ' days ago'}</div></div>
+        <div class="card stat"><h3>Term</h3><div class="v">${p.term_months}<span class="muted" style="font-size:14px"> mo</span></div><div class="s">${d.renewable ? '<span class="badge warn">renewable now</span>' : 'renewable after ' + fmtDate(d.renewable_after)}</div></div>
+      </div>
+      <div class="actions ${isAdmin() ? '' : 'hidden'}">
+        <button class="btn" data-act="renew">Renew</button>
+        <button class="btn secondary" data-act="seats" ${dl < 0 ? 'disabled title="Renew first"' : ''}>Add seats</button>
+        <button class="btn secondary" data-act="reissue" ${!k ? 'disabled' : ''}>Re-issue key</button>
+        <button class="btn danger" data-act="revoke" ${!k ? 'disabled' : ''}>Revoke</button>
+      </div>
+      <div class="tabs"><button class="active" data-tab="acts">Activations (${acts.activations.length})</button><button data-tab="events">Audit (${evs.events.length})</button><button data-tab="meta">Details</button></div>
+      <div data-pane="acts">${acts.activations.length ? `<table><thead><tr><th>Device</th><th>Hostname</th><th>Activated</th><th>Last seen</th><th></th></tr></thead><tbody>${acts.activations.map(a => `<tr><td>${esc(a.device_id)}</td><td>${esc(a.hostname || '—')}</td><td>${fmtDT(a.activated_at)}</td><td>${fmtDT(a.last_seen_at)}</td><td>${isAdmin() ? `<button class="btn sm secondary" data-act="deactivate" data-dev="${esc(a.device_id)}">Release</button>` : ''}</td></tr>`).join('')}</tbody></table>` : '<div class="empty">No active endpoints.</div>'}</div>
+      <div data-pane="events" class="hidden"><ul class="timeline">${evs.events.slice().reverse().map(e => `<li><span class="t">${fmtDT(e.created_at)}</span><span><span class="badge ${e.action === 'revoked' ? 'bad' : e.action === 'renewed' || e.action === 'seats_added' ? 'info' : ''}">${esc(e.action)}</span></span><span>${esc(e.detail || e.key || '')}${e.actor ? ` <span class="muted">· by ${esc(e.actor)}</span>` : ''}</span></li>`).join('') || '<li class="muted">No events.</li>'}</ul></div>
+      <div data-pane="meta" class="hidden"><dl class="kv"><dt>Contract ID</dt><dd>#${p.id}</dd><dt>Created</dt><dd>${fmtDT(p.created_at)}</dd><dt>Updated</dt><dd>${fmtDT(p.updated_at)}</dd><dt>Term years</dt><dd>${p.term_years}</dd><dt>Key issued</dt><dd>${k ? fmtDT(k.created_at) : '—'}</dd><dt>Key status</dt><dd>${k ? esc(k.status) : 'none'}</dd></dl></div>
+    </div>
+  </div>`;
+
+  const root = $('#c-detail');
+  root.querySelectorAll('.tabs button').forEach(b => b.addEventListener('click', () => {
+    root.querySelectorAll('.tabs button').forEach(x => x.classList.toggle('active', x === b));
+    root.querySelectorAll('[data-pane]').forEach(pn => pn.classList.toggle('hidden', pn.dataset.pane !== b.dataset.tab));
+  }));
+  root.querySelectorAll('[data-act]').forEach(b => b.addEventListener('click', () => action(b.dataset.act, b.dataset.dev)));
+}
+
+async function action(act, dev) {
+  const p = current.purchase, k = current.keys[0];
+  try {
+    if (act === 'copy') return KMS.copy(k.key);
+    if (act === 'renew') {
+      $('#renew-id').textContent = '#' + p.id;
+      $('#renew-hint').textContent = current.renewable ? `Extends from ${fmtDate(p.expires_at)}${daysLeft(p.expires_at) < 0 ? ' (lapsed → from today)' : ''}. Activations are preserved.` : `Too early: renewable after ${fmtDate(current.renewable_after)}. Request will be rejected (409).`;
+      const r = await openDialog('#dlg-renew');
+      if (!r) return;
+      ribbon('Renewing…', 'busy');
+      const out = await api('POST', `/purchases/${p.id}/renew`, { term_months: +r.term_months, add_quantity: +r.add_quantity || 0 });
+      ribbon(`Renewed #${p.id} → expires ${fmtDate(out.purchase.expires_at)}${out.seats_added ? ', +' + out.seats_added + ' seats' : ''}.`, 'ok');
+    } else if (act === 'seats') {
+      $('#seats-id').textContent = '#' + p.id;
+      const r = await openDialog('#dlg-seats'); if (!r) return;
+      ribbon('Adding seats…', 'busy');
+      const out = await api('POST', `/purchases/${p.id}/keys`, { quantity: +r.quantity });
+      ribbon(`Seat quota now ${out.keys[0].seats}.`, 'ok');
+    } else if (act === 'reissue') {
+      if (!await confirm('Re-issue key', `Replace ${k.key} with a new key string? The old key stops validating immediately; ${k.used_seats} activations carry over.`)) return;
+      ribbon('Re-issuing…', 'busy');
+      const out = await api('POST', `/keys/${k.key}/reissue`);
+      ribbon('New key: ' + out.key.key, 'ok');
+    } else if (act === 'revoke') {
+      if (!await confirm('Revoke key', `Revoke ${k.key}? All ${k.used_seats} endpoints will fail validation. This cannot be undone.`)) return;
+      ribbon('Revoking…', 'busy');
+      await api('DELETE', `/keys/${k.key}`);
+      ribbon('Key revoked.', 'ok');
+    } else if (act === 'deactivate') {
+      if (!await confirm('Release seat', `Release the seat held by device ${dev}?`)) return;
+      await api('DELETE', `/keys/${k.key}/activations/${encodeURIComponent(dev)}`);
+      ribbon('Seat released for ' + dev + '.', 'ok');
+    }
+    await refreshDetail();
+  } catch (e) { ribbon('Error: ' + (e.data?.error || e.message) + (e.data?.renewable_after ? ' — renewable after ' + fmtDate(e.data.renewable_after) : ''), 'err'); }
+}
+
+function openDialog(sel) {
+  return new Promise(res => {
+    const dlg = $(sel), form = dlg.querySelector('form');
+    dlg.returnValue = '';
+    dlg.addEventListener('close', () => res(dlg.returnValue === 'ok' ? Object.fromEntries(new FormData(form)) : null), { once: true });
+    dlg.showModal();
+  });
+}
+function confirm(title, text) {
+  $('#confirm-title').textContent = title; $('#confirm-text').textContent = text;
+  return openDialog('#dlg-confirm').then(r => !!r);
+}
+
+// ---------- key lookup ----------
+async function lookupKey() {
+  const key = $('#k-key').value.trim().toUpperCase(); if (!key) return;
+  try {
+    ribbon('Looking up ' + key + '…', 'busy');
+    const k = await api('GET', `/keys/${key}`);
+    const d = await api('GET', `/purchases/${k.purchase_id}?include=all`);
+    $('#k-out').innerHTML = `<div class="card"><div class="card-h"><h3>Key</h3>${statusBadge(k)}</div><div class="card-b stack">
+      <div class="keybox"><code>${esc(k.key)}</code></div>
+      <dl class="kv"><dt>Contract</dt><dd><a href="#contracts" id="k-open">#${k.purchase_id} · ${esc(k.customer_id)} · ${esc(k.product)}</a></dd><dt>Seats</dt><dd>${k.used_seats} / ${k.seats}</dd><dt>Expires</dt><dd>${fmtDate(k.expires_at)}</dd><dt>Status</dt><dd>${esc(k.status)}</dd>
+      <dt>All keys on contract</dt><dd>${d.keys.map(x => `<span class="badge ${x.status === 'active' ? 'active' : 'bad'}">${esc(x.key)} · ${esc(x.status)}</span>`).join(' ')}</dd></dl></div></div>`;
+    $('#k-open').addEventListener('click', async () => { $('#c-id').value = k.purchase_id; $('#c-cust').value = ''; await searchContracts(); });
+    ribbon('Found.', 'ok');
+  } catch (e) { $('#k-out').innerHTML = `<div class="card"><div class="empty">${esc(e.message)}</div></div>`; ribbon('Error: ' + e.message, 'err'); }
+}
+$('#k-go').addEventListener('click', lookupKey);
+$('#k-key').addEventListener('keydown', e => e.key === 'Enter' && lookupKey());
+
+// ---------- new contract ----------
+$('#new-form').addEventListener('submit', async e => {
+  e.preventDefault();
+  const f = Object.fromEntries(new FormData(e.target));
+  try {
+    ribbon('Generating key…', 'busy');
+    const out = await api('POST', '/purchase', { customer_id: f.customer_id.trim(), product: f.product.trim(), quantity: +f.quantity, term_years: +f.term_years });
+    $('#new-out').classList.remove('hidden');
+    $('#new-key').textContent = out.key.key;
+    $('#new-kv').innerHTML = `<dt>Contract</dt><dd>#${out.purchase.id}</dd><dt>Customer</dt><dd>${esc(out.purchase.customer_id)}</dd><dt>Product</dt><dd>${esc(out.purchase.product)}</dd><dt>Seat quota</dt><dd>${out.key.seats} endpoints</dd><dt>Term</dt><dd>${out.purchase.term_months} months</dd><dt>Expires</dt><dd>${fmtDate(out.purchase.expires_at)}</dd>`;
+    $('#new-copy').onclick = () => KMS.copy(out.key.key);
+    ribbon(`Issued key for ${out.purchase.customer_id} (#${out.purchase.id}).`, 'ok');
+  } catch (err) { ribbon('Error: ' + err.message, 'err'); }
+});
+
+// ---------- start ----------
+$('#ribbon-right').textContent = location.host;
+checkAuth().then(ok => { if (ok) boot(); });
+</script>
+</body>
+</html>

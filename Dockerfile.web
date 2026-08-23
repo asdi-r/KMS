@@ -1,0 +1,4 @@
+FROM nginx:1.27-alpine
+RUN printf 'server {\n  listen 8080;\n  root /usr/share/nginx/html;\n  add_header X-Content-Type-Options nosniff;\n  add_header X-Frame-Options DENY;\n  location = /admin  { try_files /admin.html =404; }\n  location = /portal { try_files /portal.html =404; }\n  location / { try_files $uri $uri/ /index.html; }\n}\n' > /etc/nginx/conf.d/default.conf
+COPY web/ /usr/share/nginx/html/
+EXPOSE 8080

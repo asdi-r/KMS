@@ -1,0 +1,112 @@
+# KMS production stack for Coolify (Docker Compose resource).
+# Diagram mapping: API GW = kong, Get Key/Purchase/Key Validation = kms-api,
+# Keygen+Publisher = kms-api, SQS = Redis Streams, Subscriber = kms-subscriber,
+# Aurora = postgres, redis = redis (cache).
+#
+# Set the public domain on the `kong` service in Coolify (port 8000).
+
+services:
+  kong:
+    build:
+      context: .
+      dockerfile: Dockerfile.kong
+    restart: unless-stopped
+    environment: {}
+    expose:
+      - "8000"
+    depends_on:
+      kms-api:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "kong", "health"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+
+  kms-web:
+    build:
+      context: .
+      dockerfile: Dockerfile.web
+    restart: unless-stopped
+    expose:
+      - "8080"
+
+  kms-api:
+    image: kms:latest
+    build: .
+    restart: unless-stopped
+    command: ["-mode", "api"]
+    environment:
+      PORT: "8080"
+      DATABASE_URL: postgres://kms:${SERVICE_PASSWORD_POSTGRES}@postgres:5432/kms?sslmode=disable
+      REDIS_URL: redis://redis:6379/0
+      CACHE_TTL: 10m
+      ALLOWED_TERM_YEARS: "1,2"
+      DEFAULT_TERM_YEARS: "1"
+      RENEWAL_WINDOW_DAYS: "60"
+      MIN_RENEW_MONTHS: "1"
+      JWT_SECRET: ${JWT_SECRET:-dev-secret-change-me-dev-secret-change-me}
+      KMS_API_KEY: ${KMS_API_KEY:-dev-api-key}
+      ADMIN_USERNAME: admin
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-admin-password-dev}
+    expose:
+      - "8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8080/health || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+
+  kms-subscriber:
+    image: kms:latest
+    build: .
+    restart: unless-stopped
+    command: ["-mode", "subscriber"]
+    environment:
+      DATABASE_URL: postgres://kms:${SERVICE_PASSWORD_POSTGRES}@postgres:5432/kms?sslmode=disable
+      REDIS_URL: redis://redis:6379/0
+      MAX_RETRIES: "5"
+      RETRY_DELAY: 5s
+      WEBHOOK_URL: ${WEBHOOK_URL:-}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: kms
+      POSTGRES_PASSWORD: ${SERVICE_PASSWORD_POSTGRES}
+      POSTGRES_DB: kms
+    volumes:
+      - pg-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U kms -d kms"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+volumes:
+  pg-data:
+  redis-data:

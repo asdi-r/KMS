@@ -1,0 +1,495 @@
+{
+  "info": {
+    "name": "KMS – Key Management Service",
+    "_postman_id": "7c1e2d4a-kms-0002",
+    "description": "Model: 1 kontrak = 1 license key dengan kuota seat (quantity). Endpoint antivirus mengaktivasi key dengan device_id; aktivasi melebihi kuota ditolak.\n\nIsi variabel `apikey` (SERVICE_PASSWORD_KMSAPIKEY dari Coolify). Jalankan folder berurutan lewat Collection Runner; variabel purchaseId/licenseKey terisi otomatis.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "baseUrl", "value": "https://kms.116.212.74.168.sslip.io" },
+    { "key": "apikey", "value": "ISI_DARI_COOLIFY" },
+    { "key": "purchaseId", "value": "" },
+    { "key": "licenseKey", "value": "" },
+    { "key": "oldKey", "value": "" }
+  ],
+  "item": [
+    {
+      "name": "00 Health & Auth",
+      "item": [
+        {
+          "name": "TC-00 Health (publik)",
+          "request": { "method": "GET", "url": "{{baseUrl}}/health" },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('200 ok', () => pm.response.to.have.status(200));",
+            "pm.test('status ok', () => pm.expect(pm.response.json().status).to.eql('ok'));"
+          ]}}]
+        },
+        {
+          "name": "TC-01 Purchase tanpa apikey → 401",
+          "request": {
+            "method": "POST", "url": "{{baseUrl}}/purchase",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\"customer_id\":\"PT-MUF\",\"product\":\"ANTIVIRUS\",\"quantity\":1,\"term_years\":1}" }
+          },
+          "event": [{ "listen": "test", "script": { "exec": ["pm.test('401', () => pm.response.to.have.status(401));"] }}]
+        },
+        {
+          "name": "TC-02 Purchase apikey salah → 401",
+          "request": {
+            "method": "POST", "url": "{{baseUrl}}/purchase",
+            "header": [{ "key": "Content-Type", "value": "application/json" }, { "key": "X-API-Key", "value": "kunci-salah" }],
+            "body": { "mode": "raw", "raw": "{\"customer_id\":\"PT-MUF\",\"product\":\"ANTIVIRUS\",\"quantity\":1,\"term_years\":1}" }
+          },
+          "event": [{ "listen": "test", "script": { "exec": ["pm.test('401', () => pm.response.to.have.status(401));"] }}]
+        }
+      ]
+    },
+    {
+      "name": "01 Generate Key (Skenario 1: PT MUF, 1 tahun, 100 endpoint)",
+      "item": [
+        {
+          "name": "TC-10 Generate PT MUF: 1 tahun, kuota 100 endpoint → 201, 1 key",
+          "request": {
+            "method": "POST", "url": "{{baseUrl}}/purchase",
+            "header": [{ "key": "Content-Type", "value": "application/json" }, { "key": "X-API-Key", "value": "{{apikey}}" }],
+            "body": { "mode": "raw", "raw": "{\n  \"customer_id\": \"PT-MUF\",\n  \"product\": \"ANTIVIRUS\",\n  \"quantity\": 100,\n  \"term_years\": 1\n}" }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('201', () => pm.response.to.have.status(201));",
+            "const b = pm.response.json();",
+            "pm.test('1 license key', () => pm.expect(b.key.key).to.match(/^[A-Z0-9]{5}(-[A-Z0-9]{5}){4}$/));",
+            "pm.test('kuota 100 seat, 0 terpakai', () => { pm.expect(b.key.seats).to.eql(100); pm.expect(b.key.used_seats).to.eql(0); });",
+            "pm.test('quantity kontrak 100', () => pm.expect(b.purchase.quantity).to.eql(100));",
+            "pm.test('periode 12 bulan', () => pm.expect(b.purchase.term_months).to.eql(12));",
+            "pm.test('expired ~1 tahun', () => { const d=(new Date(b.purchase.expires_at)-Date.now())/8.64e7; pm.expect(d).to.be.within(364,367); });",
+            "pm.collectionVariables.set('purchaseId', b.purchase.id);",
+            "pm.collectionVariables.set('licenseKey', b.key.key);"
+          ]}}]
+        },
+        {
+          "name": "TC-11 term_years=3 → 400",
+          "request": {
+            "method": "POST", "url": "{{baseUrl}}/purchase",
+            "header": [{ "key": "Content-Type", "value": "application/json" }, { "key": "X-API-Key", "value": "{{apikey}}" }],
+            "body": { "mode": "raw", "raw": "{\"customer_id\":\"PT-MUF\",\"product\":\"ANTIVIRUS\",\"quantity\":1,\"term_years\":3}" }
+          },
+          "event": [{ "listen": "test", "script": { "exec": ["pm.test('400', () => pm.response.to.have.status(400));"] }}]
+        },
+        {
+          "name": "TC-12 Tanpa customer_id → 400",
+          "request": {
+            "method": "POST", "url": "{{baseUrl}}/purchase",
+            "header": [{ "key": "Content-Type", "value": "application/json" }, { "key": "X-API-Key", "value": "{{apikey}}" }],
+            "body": { "mode": "raw", "raw": "{\"product\":\"ANTIVIRUS\",\"quantity\":1}" }
+          },
+          "event": [{ "listen": "test", "script": { "exec": ["pm.test('400', () => pm.response.to.have.status(400));"] }}]
+        },
+        {
+          "name": "TC-13 quantity 1001 → 400 (maks 1000)",
+          "request": {
+            "method": "POST", "url": "{{baseUrl}}/purchase",
+            "header": [{ "key": "Content-Type", "value": "application/json" }, { "key": "X-API-Key", "value": "{{apikey}}" }],
+            "body": { "mode": "raw", "raw": "{\"customer_id\":\"PT-MUF\",\"product\":\"ANTIVIRUS\",\"quantity\":1001,\"term_years\":1}" }
+          },
+          "event": [{ "listen": "test", "script": { "exec": ["pm.test('400', () => pm.response.to.have.status(400));"] }}]
+        }
+      ]
+    },
+    {
+      "name": "02 Aktivasi Endpoint & Kuota Seat",
+      "description": "Central antivirus PT MUF mengaktivasi key untuk tiap endpoint. Kuota 100 → aktivasi ke-101 ditolak.",
+      "item": [
+        {
+          "name": "TC-20 Activate endpoint dev-001 → 200, used 1/100",
+          "request": {
+            "method": "POST", "url": "{{baseUrl}}/activate",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"key\": \"{{licenseKey}}\",\n  \"device_id\": \"dev-001\",\n  \"hostname\": \"PC-FINANCE-01\"\n}" }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('200', () => pm.response.to.have.status(200));",
+            "const b = pm.response.json();",
+            "pm.test('activated', () => pm.expect(b.activated).to.eql(true));",
+            "pm.test('used_seats=1, remaining=99', () => { pm.expect(b.used_seats).to.eql(1); pm.expect(b.remaining_seats).to.eql(99); });"
+          ]}}]
+        },
+        {
+          "name": "TC-21 Activate dev-001 lagi (idempotent) → 200, used tetap 1",
+          "request": {
+            "method": "POST", "url": "{{baseUrl}}/activate",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\"key\":\"{{licenseKey}}\",\"device_id\":\"dev-001\"}" }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('200', () => pm.response.to.have.status(200));",
+            "pm.test('used_seats tetap 1', () => pm.expect(pm.response.json().used_seats).to.eql(1));"
+          ]}}]
+        },
+        {
+          "name": "TC-22 Activate dev-002 … dev-100 (loop 99x) → semua 200",
+          "request": {
+            "method": "POST", "url": "{{baseUrl}}/activate",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\"key\":\"{{licenseKey}}\",\"device_id\":\"dev-{{devNo}}\"}" }
+          },
+          "event": [
+            { "listen": "prerequest", "script": { "exec": [
+              "let n = pm.collectionVariables.get('devNo');",
+              "n = n ? parseInt(n) + 1 : 2;",
+              "pm.collectionVariables.set('devNo', String(n).padStart(3,'0'));"
+            ]}},
+            { "listen": "test", "script": { "exec": [
+              "pm.test('200', () => pm.response.to.have.status(200));",
+              "const n = parseInt(pm.collectionVariables.get('devNo'));",
+              "pm.test('used_seats = ' + n, () => pm.expect(pm.response.json().used_seats).to.eql(n));",
+              "if (n < 100) { postman.setNextRequest('TC-22 Activate dev-002 … dev-100 (loop 99x) → semua 200'); } else { pm.collectionVariables.unset('devNo'); }"
+            ]}}
+          ]
+        },
+        {
+          "name": "TC-23 Activate endpoint ke-101 → 409 seat_limit_reached",
+          "request": {
+            "method": "POST", "url": "{{baseUrl}}/activate",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\"key\":\"{{licenseKey}}\",\"device_id\":\"dev-101\"}" }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('409', () => pm.response.to.have.status(409));",
+            "const b = pm.response.json();",
+            "pm.test('reason seat_limit_reached, 100/100', () => { pm.expect(b.reason).to.eql('seat_limit_reached'); pm.expect(b.used_seats).to.eql(100); pm.expect(b.remaining_seats).to.eql(0); });"
+          ]}}]
+        },
+        {
+          "name": "TC-24 Validate dev-050 (aktif) → valid",
+          "request": {
+            "method": "POST", "url": "{{baseUrl}}/validate",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\"key\":\"{{licenseKey}}\",\"device_id\":\"dev-050\"}" }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "const b = pm.response.json();",
+            "pm.test('valid & device_active', () => { pm.expect(b.valid).to.eql(true); pm.expect(b.device_active).to.eql(true); });"
+          ]}}]
+        },
+        {
+          "name": "TC-25 Validate dev-101 (belum aktivasi) → device_not_activated",
+          "request": {
+            "method": "POST", "url": "{{baseUrl}}/validate",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\"key\":\"{{licenseKey}}\",\"device_id\":\"dev-101\"}" }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "const b = pm.response.json();",
+            "pm.test('valid=false device_not_activated', () => { pm.expect(b.valid).to.eql(false); pm.expect(b.reason).to.eql('device_not_activated'); });"
+          ]}}]
+        },
+        {
+          "name": "TC-26 Deactivate dev-001 (PC diganti) → 200, remaining 1",
+          "request": {
+            "method": "POST", "url": "{{baseUrl}}/deactivate",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\"key\":\"{{licenseKey}}\",\"device_id\":\"dev-001\"}" }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('200', () => pm.response.to.have.status(200));",
+            "pm.test('remaining_seats=1', () => pm.expect(pm.response.json().remaining_seats).to.eql(1));"
+          ]}}]
+        },
+        {
+          "name": "TC-27 Activate dev-101 setelah ada seat kosong → 200",
+          "request": {
+            "method": "POST", "url": "{{baseUrl}}/activate",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\"key\":\"{{licenseKey}}\",\"device_id\":\"dev-101\"}" }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('200', () => pm.response.to.have.status(200));",
+            "pm.test('used_seats=100', () => pm.expect(pm.response.json().used_seats).to.eql(100));"
+          ]}}]
+        },
+        {
+          "name": "TC-28 Deactivate device yang tidak aktif → 404",
+          "request": {
+            "method": "POST", "url": "{{baseUrl}}/deactivate",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\"key\":\"{{licenseKey}}\",\"device_id\":\"dev-999\"}" }
+          },
+          "event": [{ "listen": "test", "script": { "exec": ["pm.test('404 device_not_activated', () => { pm.response.to.have.status(404); pm.expect(pm.response.json().reason).to.eql('device_not_activated'); });"] }}]
+        },
+        {
+          "name": "TC-29 Daftar aktivasi (admin)",
+          "request": { "method": "GET", "url": "{{baseUrl}}/keys/{{licenseKey}}/activations", "header": [{ "key": "X-API-Key", "value": "{{apikey}}" }] },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('200', () => pm.response.to.have.status(200));",
+            "const b = pm.response.json();",
+            "pm.test('100 aktivasi aktif', () => pm.expect(b.activations.length).to.eql(100));",
+            "pm.test('key used_seats=100', () => pm.expect(b.key.used_seats).to.eql(100));"
+          ]}}]
+        }
+      ]
+    },
+    {
+      "name": "03 Re-issuance",
+      "item": [
+        {
+          "name": "TC-30 Get kontrak → 1 key, seats 100/100",
+          "request": { "method": "GET", "url": "{{baseUrl}}/purchases/{{purchaseId}}", "header": [{ "key": "X-API-Key", "value": "{{apikey}}" }] },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('200', () => pm.response.to.have.status(200));",
+            "const b = pm.response.json();",
+            "pm.test('1 key aktif', () => pm.expect(b.keys.length).to.eql(1));",
+            "pm.test('seats 100 used 100', () => { pm.expect(b.keys[0].seats).to.eql(100); pm.expect(b.keys[0].used_seats).to.eql(100); });",
+            "pm.test('belum renewable', () => pm.expect(b.renewable).to.eql(false));"
+          ]}}]
+        },
+        {
+          "name": "TC-31 List kontrak PT MUF",
+          "request": { "method": "GET", "url": "{{baseUrl}}/purchases?customer_id=PT-MUF", "header": [{ "key": "X-API-Key", "value": "{{apikey}}" }] },
+          "event": [{ "listen": "test", "script": { "exec": ["pm.test('200 & ada kontrak', () => { pm.response.to.have.status(200); pm.expect(pm.response.json().purchases.length).to.be.at.least(1); });"] }}]
+        },
+        {
+          "name": "TC-32 Get key (ambil ulang key tersimpan)",
+          "request": { "method": "GET", "url": "{{baseUrl}}/keys/{{licenseKey}}", "header": [{ "key": "X-API-Key", "value": "{{apikey}}" }] },
+          "event": [{ "listen": "test", "script": { "exec": ["pm.test('200 key cocok', () => { pm.response.to.have.status(200); pm.expect(pm.response.json().key).to.eql(pm.collectionVariables.get('licenseKey')); });"] }}]
+        },
+        {
+          "name": "TC-33 Re-issue key (key bocor) → key baru, aktivasi ikut pindah",
+          "request": { "method": "POST", "url": "{{baseUrl}}/keys/{{licenseKey}}/reissue", "header": [{ "key": "X-API-Key", "value": "{{apikey}}" }] },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('201', () => pm.response.to.have.status(201));",
+            "const b = pm.response.json();",
+            "pm.test('key baru ≠ lama', () => pm.expect(b.key.key).to.not.eql(b.old_key));",
+            "pm.test('seats & used_seats terbawa (100/100)', () => { pm.expect(b.key.seats).to.eql(100); pm.expect(b.key.used_seats).to.eql(100); });",
+            "pm.collectionVariables.set('oldKey', b.old_key);",
+            "pm.collectionVariables.set('licenseKey', b.key.key);"
+          ]}}]
+        },
+        {
+          "name": "TC-34 Validate key lama → reissued",
+          "request": {
+            "method": "POST", "url": "{{baseUrl}}/validate",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\"key\":\"{{oldKey}}\"}" }
+          },
+          "event": [{ "listen": "test", "script": { "exec": ["pm.test('reason=reissued', () => pm.expect(pm.response.json().reason).to.eql('reissued'));"] }}]
+        },
+        {
+          "name": "TC-35 Validate dev-050 dengan key baru → valid (tanpa aktivasi ulang)",
+          "request": {
+            "method": "POST", "url": "{{baseUrl}}/validate",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\"key\":\"{{licenseKey}}\",\"device_id\":\"dev-050\"}" }
+          },
+          "event": [{ "listen": "test", "script": { "exec": ["pm.test('valid=true', () => pm.expect(pm.response.json().valid).to.eql(true));"] }}]
+        },
+        {
+          "name": "TC-36 Re-issue key lama lagi → 409",
+          "request": { "method": "POST", "url": "{{baseUrl}}/keys/{{oldKey}}/reissue", "header": [{ "key": "X-API-Key", "value": "{{apikey}}" }] },
+          "event": [{ "listen": "test", "script": { "exec": ["pm.test('409', () => pm.response.to.have.status(409));"] }}]
+        }
+      ]
+    },
+    {
+      "name": "04 Perpanjangan (Skenario 2, 3, 4, 5)",
+      "description": "Langkah [SIMULASI] perlu SQL dulu untuk memundurkan expires_at kontrak uji — lihat skenario.md.",
+      "item": [
+        {
+          "name": "TC-40 (S4) Renew saat sisa >2 bulan → 409 terlalu awal",
+          "request": {
+            "method": "POST", "url": "{{baseUrl}}/purchases/{{purchaseId}}/renew",
+            "header": [{ "key": "Content-Type", "value": "application/json" }, { "key": "X-API-Key", "value": "{{apikey}}" }],
+            "body": { "mode": "raw", "raw": "{\n  \"term_years\": 1\n}" }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('409', () => pm.response.to.have.status(409));",
+            "pm.test('renewable_after = expired − 60 hari', () => { const b=pm.response.json(); const d=(new Date(b.expires_at)-new Date(b.renewable_after))/8.64e7; pm.expect(Math.round(d)).to.eql(60); });"
+          ]}}]
+        },
+        {
+          "name": "TC-41 (S4) [SIMULASI sisa 59 hari] renewable=true",
+          "request": { "method": "GET", "url": "{{baseUrl}}/purchases/{{purchaseId}}", "header": [{ "key": "X-API-Key", "value": "{{apikey}}" }] },
+          "event": [{ "listen": "test", "script": { "exec": ["pm.test('renewable=true', () => pm.expect(pm.response.json().renewable).to.eql(true));"] }}]
+        },
+        {
+          "name": "TC-42 (S2) [SIMULASI expired −5 hari] Activate saat expired → 403",
+          "request": {
+            "method": "POST", "url": "{{baseUrl}}/activate",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\"key\":\"{{licenseKey}}\",\"device_id\":\"dev-expired\"}" }
+          },
+          "event": [{ "listen": "test", "script": { "exec": ["pm.test('403 expired', () => { pm.response.to.have.status(403); pm.expect(pm.response.json().reason).to.eql('expired'); });"] }}]
+        },
+        {
+          "name": "TC-43 (S2) Renew setelah expired, kuota tetap 100 → 200",
+          "request": {
+            "method": "POST", "url": "{{baseUrl}}/purchases/{{purchaseId}}/renew",
+            "header": [{ "key": "Content-Type", "value": "application/json" }, { "key": "X-API-Key", "value": "{{apikey}}" }],
+            "body": { "mode": "raw", "raw": "{\n  \"term_years\": 1\n}" }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('200', () => pm.response.to.have.status(200));",
+            "const b = pm.response.json();",
+            "pm.test('kuota tetap 100, used 100 terjaga', () => { pm.expect(b.purchase.quantity).to.eql(100); pm.expect(b.keys[0].seats).to.eql(100); pm.expect(b.keys[0].used_seats).to.eql(100); });",
+            "pm.test('expired = hari ini + 1 thn (sudah lapse)', () => { const d=(new Date(b.purchase.expires_at)-Date.now())/8.64e7; pm.expect(d).to.be.within(364,367); });",
+            "pm.test('key ikut diperpanjang', () => pm.expect(b.keys[0].expires_at).to.eql(b.purchase.expires_at));"
+          ]}}]
+        },
+        {
+          "name": "TC-44 (S2) Validate dev-050 setelah renew → valid",
+          "request": {
+            "method": "POST", "url": "{{baseUrl}}/validate",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\"key\":\"{{licenseKey}}\",\"device_id\":\"dev-050\"}" }
+          },
+          "event": [{ "listen": "test", "script": { "exec": ["pm.test('valid=true', () => pm.expect(pm.response.json().valid).to.eql(true));"] }}]
+        },
+        {
+          "name": "TC-45 (S3) [SIMULASI expired −1 hari] Renew + tambah kuota 100 → 200 seat",
+          "request": {
+            "method": "POST", "url": "{{baseUrl}}/purchases/{{purchaseId}}/renew",
+            "header": [{ "key": "Content-Type", "value": "application/json" }, { "key": "X-API-Key", "value": "{{apikey}}" }],
+            "body": { "mode": "raw", "raw": "{\n  \"term_years\": 1,\n  \"add_quantity\": 100\n}" }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('200', () => pm.response.to.have.status(200));",
+            "const b = pm.response.json();",
+            "pm.test('quantity 100 → 200, seats 200, used 100', () => { pm.expect(b.purchase.quantity).to.eql(200); pm.expect(b.keys[0].seats).to.eql(200); pm.expect(b.keys[0].used_seats).to.eql(100); });",
+            "pm.test('seats_added=100', () => pm.expect(b.seats_added).to.eql(100));"
+          ]}}]
+        },
+        {
+          "name": "TC-46 (S3) Activate endpoint ke-150 → 200 (kuota sudah 200)",
+          "request": {
+            "method": "POST", "url": "{{baseUrl}}/activate",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\"key\":\"{{licenseKey}}\",\"device_id\":\"dev-150\"}" }
+          },
+          "event": [{ "listen": "test", "script": { "exec": ["pm.test('200, remaining 99', () => { pm.response.to.have.status(200); pm.expect(pm.response.json().remaining_seats).to.eql(99); });"] }}]
+        },
+        {
+          "name": "TC-47 Tambah kuota tanpa renew (+50) → seats 250",
+          "request": {
+            "method": "POST", "url": "{{baseUrl}}/purchases/{{purchaseId}}/keys",
+            "header": [{ "key": "Content-Type", "value": "application/json" }, { "key": "X-API-Key", "value": "{{apikey}}" }],
+            "body": { "mode": "raw", "raw": "{\n  \"quantity\": 50\n}" }
+          },
+          "event": [{ "listen": "test", "script": { "exec": ["pm.test('200 seats=250', () => { pm.response.to.have.status(200); pm.expect(pm.response.json().keys[0].seats).to.eql(250); });"] }}]
+        },
+        {
+          "name": "TC-48 (S5) [SIMULASI sisa 10 hari] Renew 1 bulan → 200",
+          "request": {
+            "method": "POST", "url": "{{baseUrl}}/purchases/{{purchaseId}}/renew",
+            "header": [{ "key": "Content-Type", "value": "application/json" }, { "key": "X-API-Key", "value": "{{apikey}}" }],
+            "body": { "mode": "raw", "raw": "{\n  \"term_months\": 1\n}" }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('200 term_months=1', () => { pm.response.to.have.status(200); pm.expect(pm.response.json().purchase.term_months).to.eql(1); });",
+            "pm.test('expired = lama + 1 bulan (~40 hari)', () => { const d=(new Date(pm.response.json().purchase.expires_at)-Date.now())/8.64e7; pm.expect(d).to.be.within(38,42); });"
+          ]}}]
+        },
+        {
+          "name": "TC-49 (S5) [SIMULASI sisa 10 hari] Renew 7 bulan → 200",
+          "request": {
+            "method": "POST", "url": "{{baseUrl}}/purchases/{{purchaseId}}/renew",
+            "header": [{ "key": "Content-Type", "value": "application/json" }, { "key": "X-API-Key", "value": "{{apikey}}" }],
+            "body": { "mode": "raw", "raw": "{\"term_months\":7}" }
+          },
+          "event": [{ "listen": "test", "script": { "exec": ["pm.test('200 term_months=7', () => { pm.response.to.have.status(200); pm.expect(pm.response.json().purchase.term_months).to.eql(7); });"] }}]
+        },
+        {
+          "name": "TC-4A (S5) [SIMULASI sisa 10 hari] Renew 36 bulan (tanpa batas atas) → 200",
+          "request": {
+            "method": "POST", "url": "{{baseUrl}}/purchases/{{purchaseId}}/renew",
+            "header": [{ "key": "Content-Type", "value": "application/json" }, { "key": "X-API-Key", "value": "{{apikey}}" }],
+            "body": { "mode": "raw", "raw": "{\"term_months\":36}" }
+          },
+          "event": [{ "listen": "test", "script": { "exec": ["pm.test('200 term_months=36 term_years=3', () => { pm.response.to.have.status(200); const p=pm.response.json().purchase; pm.expect(p.term_months).to.eql(36); pm.expect(p.term_years).to.eql(3); });"] }}]
+        },
+        {
+          "name": "TC-4B (S5) Renew −1 bulan → 400",
+          "request": {
+            "method": "POST", "url": "{{baseUrl}}/purchases/{{purchaseId}}/renew",
+            "header": [{ "key": "Content-Type", "value": "application/json" }, { "key": "X-API-Key", "value": "{{apikey}}" }],
+            "body": { "mode": "raw", "raw": "{\"term_months\":-1}" }
+          },
+          "event": [{ "listen": "test", "script": { "exec": ["pm.test('400', () => pm.response.to.have.status(400));"] }}]
+        }
+      ]
+    },
+    {
+      "name": "05 Validasi, Revoke & Audit",
+      "item": [
+        {
+          "name": "TC-50 Validate key tanpa device → valid + info seat",
+          "request": {
+            "method": "POST", "url": "{{baseUrl}}/validate",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\"key\":\"{{licenseKey}}\"}" }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "const b = pm.response.json();",
+            "pm.test('valid, ada seats/used/remaining', () => { pm.expect(b.valid).to.eql(true); pm.expect(b).to.include.keys('seats','used_seats','remaining_seats'); });"
+          ]}}]
+        },
+        {
+          "name": "TC-51 Validate key palsu → not_found",
+          "request": {
+            "method": "POST", "url": "{{baseUrl}}/validate",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\"key\":\"AAAAA-BBBBB-CCCCC-DDDDD-EEEEE\"}" }
+          },
+          "event": [{ "listen": "test", "script": { "exec": ["pm.test('not_found', () => pm.expect(pm.response.json().reason).to.eql('not_found'));"] }}]
+        },
+        {
+          "name": "TC-52 Activate key palsu → 404",
+          "request": {
+            "method": "POST", "url": "{{baseUrl}}/activate",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\"key\":\"AAAAA-BBBBB-CCCCC-DDDDD-EEEEE\",\"device_id\":\"x\"}" }
+          },
+          "event": [{ "listen": "test", "script": { "exec": ["pm.test('404', () => pm.response.to.have.status(404));"] }}]
+        },
+        {
+          "name": "TC-53 Activate tanpa device_id → 400",
+          "request": {
+            "method": "POST", "url": "{{baseUrl}}/activate",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\"key\":\"{{licenseKey}}\"}" }
+          },
+          "event": [{ "listen": "test", "script": { "exec": ["pm.test('400', () => pm.response.to.have.status(400));"] }}]
+        },
+        {
+          "name": "TC-54 Audit trail kontrak",
+          "request": { "method": "GET", "url": "{{baseUrl}}/purchases/{{purchaseId}}/events", "header": [{ "key": "X-API-Key", "value": "{{apikey}}" }] },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "const acts = pm.response.json().events.map(e => e.action);",
+            "pm.test('issued, activated, deactivated, reissued, renewed, seats_added', () => ['issued','activated','deactivated','reissued','renewed','seats_added'].forEach(a => pm.expect(acts).to.include(a)));"
+          ]}}]
+        },
+        {
+          "name": "TC-55 Revoke key → 200",
+          "request": { "method": "DELETE", "url": "{{baseUrl}}/keys/{{licenseKey}}", "header": [{ "key": "X-API-Key", "value": "{{apikey}}" }] },
+          "event": [{ "listen": "test", "script": { "exec": ["pm.test('200 revoked', () => { pm.response.to.have.status(200); pm.expect(pm.response.json().status).to.eql('revoked'); });"] }}]
+        },
+        {
+          "name": "TC-56 Activate setelah revoke → 403 revoked",
+          "request": {
+            "method": "POST", "url": "{{baseUrl}}/activate",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\"key\":\"{{licenseKey}}\",\"device_id\":\"dev-050\"}" }
+          },
+          "event": [{ "listen": "test", "script": { "exec": ["pm.test('403 revoked', () => { pm.response.to.have.status(403); pm.expect(pm.response.json().reason).to.eql('revoked'); });"] }}]
+        },
+        {
+          "name": "TC-57 Validate dev-050 setelah revoke → revoked",
+          "request": {
+            "method": "POST", "url": "{{baseUrl}}/validate",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\"key\":\"{{licenseKey}}\",\"device_id\":\"dev-050\"}" }
+          },
+          "event": [{ "listen": "test", "script": { "exec": ["pm.test('reason=revoked', () => pm.expect(pm.response.json().reason).to.eql('revoked'));"] }}]
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,93 @@
+# Paste this into Coolify: Project -> + New Resource -> "Docker Compose Empty".
+# Images kms:latest and kms-kong:latest are already built on the server.
+# Then set a domain on the `kong` service (port 8000) and Deploy.
+
+services:
+  kong:
+    image: 127.0.0.1:5000/kms-kong:latest
+    restart: unless-stopped
+    environment:
+      - SERVICE_FQDN_KONG_8000
+    depends_on:
+      - kms-api
+    healthcheck:
+      test: ["CMD", "kong", "health"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+
+  kms-web:
+    image: 127.0.0.1:5000/kms-web:latest
+    restart: unless-stopped
+
+  kms-api:
+    image: 127.0.0.1:5000/kms:latest
+    restart: unless-stopped
+    command: ["-mode", "api"]
+    environment:
+      - PORT=8080
+      - DATABASE_URL=postgres://kms:${SERVICE_PASSWORD_POSTGRES}@postgres:5432/kms?sslmode=disable
+      - REDIS_URL=redis://redis:6379/0
+      - CACHE_TTL=10m
+      - ALLOWED_TERM_YEARS=1,2
+      - DEFAULT_TERM_YEARS=1
+      - RENEWAL_WINDOW_DAYS=60
+      - MIN_RENEW_MONTHS=1
+      - JWT_SECRET=${SERVICE_BASE64_64_JWTSECRET}
+      - KMS_API_KEY=${SERVICE_PASSWORD_KMSAPIKEY}
+      - ADMIN_USERNAME=admin
+      - ADMIN_PASSWORD=${SERVICE_PASSWORD_ADMIN}
+    depends_on:
+      - postgres
+      - redis
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8080/health || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+
+  kms-subscriber:
+    image: 127.0.0.1:5000/kms:latest
+    restart: unless-stopped
+    command: ["-mode", "subscriber"]
+    environment:
+      - DATABASE_URL=postgres://kms:${SERVICE_PASSWORD_POSTGRES}@postgres:5432/kms?sslmode=disable
+      - REDIS_URL=redis://redis:6379/0
+      - MAX_RETRIES=5
+      - RETRY_DELAY=5s
+      - WEBHOOK_URL=${WEBHOOK_URL:-}
+    depends_on:
+      - postgres
+      - redis
+
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      - POSTGRES_USER=kms
+      - POSTGRES_PASSWORD=${SERVICE_PASSWORD_POSTGRES}
+      - POSTGRES_DB=kms
+    volumes:
+      - pg-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U kms -d kms"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+volumes:
+  pg-data:
+  redis-data:

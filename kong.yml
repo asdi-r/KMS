@@ -1,0 +1,44 @@
+_format_version: "3.0"
+
+# Authentication is handled by kms-api (JWT users / X-API-Key). Kong does
+# routing, rate limiting and request correlation.
+
+services:
+  - name: kms
+    url: http://kms-api:8080
+    routes:
+      - name: auth
+        paths: ["/auth"]
+        methods: ["GET", "POST"]
+        strip_path: false
+        plugins:
+          - name: rate-limiting
+            config: { minute: 30, policy: local }
+      - name: admin-api
+        paths: ["/purchase", "/purchases", "/keys", "/users"]
+        methods: ["GET", "POST", "PATCH", "DELETE"]
+        strip_path: false
+      - name: endpoint
+        paths: ["/validate", "/activate", "/deactivate"]
+        methods: ["POST"]
+        strip_path: false
+        plugins:
+          - name: rate-limiting
+            config: { minute: 600, policy: local }
+      - name: health
+        paths: ["/health"]
+        methods: ["GET"]
+        strip_path: false
+    plugins:
+      - name: rate-limiting
+        config: { minute: 1200, policy: local }
+      - name: correlation-id
+        config: { header_name: X-Request-Id, generator: uuid, echo_downstream: true }
+
+  - name: kms-web
+    url: http://kms-web:8080
+    routes:
+      - name: web
+        paths: ["/"]
+        methods: ["GET", "HEAD"]
+        strip_path: false

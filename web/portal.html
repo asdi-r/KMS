@@ -1,0 +1,80 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>NETRA KMS · Customer Portal</title>
+<link rel="stylesheet" href="/netra.css">
+</head>
+<body data-autonomy-mode="guided">
+<div class="center">
+  <div class="panel">
+    <div class="logo-line"><i></i>NETRA PLATFORM · CUSTOMER PORTAL</div>
+    <div class="eyebrow">License status</div>
+    <h1 style="margin:8px 0 20px">Check your license key</h1>
+
+    <div class="card">
+      <div class="card-b">
+        <form id="f" autocomplete="off">
+          <div class="field">
+            <label>License key</label>
+            <input id="key" placeholder="XXXXX-XXXXX-XXXXX-XXXXX-XXXXX" required style="text-transform:uppercase;letter-spacing:.08em">
+          </div>
+          <div class="field">
+            <label>Device ID <span class="muted">(optional — checks whether this endpoint holds a seat)</span></label>
+            <input id="dev" placeholder="e.g. PC-FINANCE-01">
+          </div>
+          <button class="btn" id="go" type="submit">Check status</button>
+        </form>
+      </div>
+    </div>
+
+    <div id="result" class="card hidden" style="margin-top:16px">
+      <div class="card-h"><h3>Result</h3><span id="r-badge"></span></div>
+      <div class="card-b stack">
+        <div class="keybox"><code id="r-key"></code></div>
+        <dl class="kv" id="r-kv"></dl>
+        <div id="r-seats"></div>
+      </div>
+    </div>
+
+    <div class="footer-line"><span>NETRA PLATFORM / KMS</span><span id="src"></span></div>
+  </div>
+</div>
+
+<script src="/app.js"></script>
+<script>
+const $ = s => document.querySelector(s);
+$('#f').addEventListener('submit', async e => {
+  e.preventDefault();
+  const key = $('#key').value.trim().toUpperCase(), device_id = $('#dev').value.trim();
+  $('#go').disabled = true;
+  try {
+    const r = await KMS.api('POST', '/validate', device_id ? { key, device_id } : { key }, { auth: false });
+    render(key, r);
+  } catch (err) {
+    render(key, { valid: false, reason: err.message });
+  } finally { $('#go').disabled = false; }
+});
+
+function render(key, r) {
+  $('#result').classList.remove('hidden');
+  $('#r-key').textContent = key;
+  const badge = $('#r-badge');
+  const reasons = { not_found: 'Key not found', expired: 'Expired', revoked: 'Revoked', reissued: 'Replaced (re-issued)', device_not_activated: 'Device not activated' };
+  if (r.valid) badge.innerHTML = '<span class="badge ok">valid</span>';
+  else badge.innerHTML = `<span class="badge ${r.reason === 'device_not_activated' ? 'warn' : 'bad'}">${KMS.esc(reasons[r.reason] || r.reason || 'invalid')}</span>`;
+  const rows = [];
+  if (r.product) rows.push(['Product', r.product]);
+  if (r.expires_at) { const d = KMS.daysLeft(r.expires_at); rows.push(['Expires', `${KMS.fmtDate(r.expires_at)} <span class="muted">(${d >= 0 ? d + ' days left' : Math.abs(d) + ' days ago'})</span>`]); }
+  if (r.seats) rows.push(['Seat quota', `${r.used_seats} / ${r.seats} used · ${r.remaining_seats} remaining`]);
+  if (r.device_active !== undefined) rows.push(['This device', r.device_active ? '<span class="badge ok">activated</span>' : '<span class="badge warn">not activated</span>']);
+  if (!r.valid && r.reason === 'expired') rows.push(['Action', 'Contact your vendor to renew the contract.']);
+  if (!r.valid && r.reason === 'device_not_activated') rows.push(['Action', 'Activate this endpoint from the antivirus central console.']);
+  $('#r-kv').innerHTML = rows.map(([k, v]) => `<dt>${k}</dt><dd>${v}</dd>`).join('');
+  $('#r-seats').innerHTML = r.seats ? KMS.meter(r.used_seats, r.seats) : '';
+  $('#src').textContent = r.source ? 'source=' + r.source : '';
+}
+</script>
+</body>
+</html>
