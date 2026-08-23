@@ -1,10 +1,10 @@
 # Paste this into Coolify: Project -> + New Resource -> "Docker Compose Empty".
-# Images kms:latest and kms-kong:latest are already built on the server.
+# Images are built by GitHub Actions (.github/workflows/build.yml) and pushed to GHCR.
 # Then set a domain on the `kong` service (port 8000) and Deploy.
 
 services:
   kong:
-    image: 127.0.0.1:5000/kms-kong:latest
+    image: ghcr.io/asdi-r/kms-kong:latest
     restart: unless-stopped
     environment:
       - SERVICE_FQDN_KONG_8000
@@ -17,11 +17,11 @@ services:
       retries: 5
 
   kms-web:
-    image: 127.0.0.1:5000/kms-web:latest
+    image: ghcr.io/asdi-r/kms-web:latest
     restart: unless-stopped
 
   kms-api:
-    image: 127.0.0.1:5000/kms:latest
+    image: ghcr.io/asdi-r/kms:latest
     restart: unless-stopped
     command: ["-mode", "api"]
     environment:
@@ -48,7 +48,7 @@ services:
       start_period: 20s
 
   kms-subscriber:
-    image: 127.0.0.1:5000/kms:latest
+    image: ghcr.io/asdi-r/kms:latest
     restart: unless-stopped
     command: ["-mode", "subscriber"]
     environment:

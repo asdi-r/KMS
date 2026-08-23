@@ -23,7 +23,11 @@ Implements the diagram:
 | `/admin` | Admin console: dashboard per customer, contracts, renew / add seats / re-issue / revoke, activations (admin release), audit with actor, key lookup, new contract, user management, change password | username + password → JWT (sessionStorage only); viewer role sees read-only UI |
 | `/portal` | Customer portal: check license status, expiry, seat usage, and whether a given device holds a seat | none (uses public `/validate`) |
 
-Static files live in `web/` (`netra.css` = design tokens, `app.js` = API helper). Build: `docker build -t 127.0.0.1:5000/kms-web:latest -f Dockerfile.web .`
+Static files live in `web/` (`netra.css` = design tokens, `app.js` = API helper).
+
+## CI/CD
+
+Every push to `main` runs `.github/workflows/build.yml`, which builds `kms`, `kms-kong`, `kms-web` and pushes them to GHCR as `ghcr.io/asdi-r/<name>:latest` and `:sha-<short>`. `coolify-compose.yml` references those images; **Redeploy** in Coolify pulls the new build. Tag `vX.Y.Z` to publish a versioned image.
 
 ## API (through Kong, port 8000)
 
