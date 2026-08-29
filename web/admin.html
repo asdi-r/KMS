@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Netrasky KMS · Admin</title>
-<link rel="stylesheet" href="/netra.css?v=202608232323">
+<link rel="stylesheet" href="/netra.css?v=202608300213">
 </head>
 <body data-autonomy-mode="guided">
 
@@ -68,7 +68,7 @@
 
     <!-- CONTRACTS -->
     <section id="page-contracts" class="page stack hidden">
-      <div class="row"><div><label>Customer ID</label><input id="c-cust" placeholder="PT-MUF"></div><div><label>Contract ID</label><input id="c-id" placeholder="12"></div><button class="btn" id="c-go" style="flex:0">Search</button></div>
+      <div class="row"><div><label>Customer ID</label><input id="c-cust"></div><div><label>Contract ID</label><input id="c-id" placeholder="12"></div><button class="btn" id="c-go" style="flex:0">Search</button></div>
       <div class="grid" style="grid-template-columns: 1fr 1.4fr">
         <div class="card"><div class="card-h"><h3>Results</h3></div><div id="c-list"><div class="empty">Search by customer or contract ID.</div></div></div>
         <div id="c-detail"><div class="card"><div class="empty">Select a contract.</div></div></div>
@@ -86,7 +86,7 @@
       <div class="grid cols-2">
         <div class="card"><div class="card-h"><h3>Generate contract + license key</h3></div><div class="card-b">
           <form id="new-form">
-            <div class="field"><label>Customer ID</label><input name="customer_id" placeholder="PT-MUF" required></div>
+            <div class="field"><label>Customer ID</label><input name="customer_id" required></div>
             <div class="field"><label>Product</label><input name="product" placeholder="ANTIVIRUS" required></div>
             <div class="row">
               <div class="field"><label>Seat quota (endpoints)</label><input name="quantity" type="number" min="1" max="1000" value="100" required></div>
@@ -172,7 +172,7 @@
     <div class="actions"><button class="btn danger" value="ok" id="confirm-ok">Confirm</button><button class="btn secondary" value="cancel">Cancel</button></div></div>
 </form></dialog>
 
-<script src="/app.js?v=202608232323"></script>
+<script src="/app.js?v=202608300213"></script>
 <script>
 const $ = s => document.querySelector(s), $$ = s => [...document.querySelectorAll(s)];
 const { api, esc, fmtDate, fmtDT, daysLeft, statusBadge, meter, ribbon } = KMS;

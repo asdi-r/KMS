@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Netrasky KMS · Customer Portal</title>
-<link rel="stylesheet" href="/netra.css?v=202608232323">
+<link rel="stylesheet" href="/netra.css?v=202608300213">
 </head>
 <body data-autonomy-mode="guided">
 
@@ -24,7 +24,7 @@
           <button class="btn" id="go" type="submit">Check status</button>
         </form>
         <form id="f-login" class="hidden" autocomplete="off">
-          <div class="field"><label>Customer ID</label><input id="l-cust" placeholder="PT-MUF" required></div>
+          <div class="field"><label>Customer ID</label><input id="l-cust" required></div>
           <div class="field"><label>License key</label><input id="l-key" placeholder="XXXXX-XXXXX-XXXXX-XXXXX-XXXXX" required style="text-transform:uppercase;letter-spacing:.08em"></div>
           <button class="btn" type="submit">Sign in</button>
           <p id="login-err" class="mono" style="color:hsl(0 70% 62%);font-size:11px;margin:10px 0 0"></p>
@@ -85,7 +85,7 @@
     <div class="actions"><button class="btn danger" value="ok">Release seat</button><button class="btn secondary" value="cancel">Cancel</button></div></div>
 </form></dialog>
 
-<script src="/app.js?v=202608232323"></script>
+<script src="/app.js?v=202608300213"></script>
 <script>
 const $ = s => document.querySelector(s), $$ = s => [...document.querySelectorAll(s)];
 const { api, esc, fmtDate, fmtDT, daysLeft, meter, ribbon } = KMS;

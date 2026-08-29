@@ -32,6 +32,11 @@ services:
     plugins:
       - name: rate-limiting
         config: { minute: 1200, policy: local }
+      - name: response-transformer
+        config:
+          add:
+            headers:
+              - "Strict-Transport-Security: max-age=31536000; includeSubDomains"
       - name: correlation-id
         config: { header_name: X-Request-Id, generator: uuid, echo_downstream: true }
 
